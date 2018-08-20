@@ -147,7 +147,6 @@ void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 
 void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
-	MPI_Win_flush_all (Buzz_mat->mpi_win);
 	MPI_Win_unlock_all(Buzz_mat->mpi_win);
 	MPI_Barrier(Buzz_mat->mpi_comm);
 }

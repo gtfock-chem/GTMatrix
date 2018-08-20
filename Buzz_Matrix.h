@@ -27,7 +27,7 @@ struct Buzz_Matrix
 
 typedef struct Buzz_Matrix* Buzz_Matrix_t;
 
-#define DEFAULE_RCV_BUF_SIZE 8388608  // 8M
+#define DEFAULE_RCV_BUF_SIZE 1048576  // 1M
 
 // Create and initialize a Buzz_Matrix structure
 // Each process has one matrix block, process ranks are arranged in row-major style
