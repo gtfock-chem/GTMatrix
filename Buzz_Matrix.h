@@ -64,35 +64,41 @@ void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 // A MPI_Barrier is called at the end of this function 
 void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 
-// Request a block from a process using MPI_Get
+// Get a block from a process using MPI_Get
 // Non-blocking, data may not be ready before synchronization
 // target_proc    : Target process
 // req_row_start  : 1st row of the required block
 // req_row_num    : Number of rows the required block has
 // req_col_start  : 1st column of the required block
 // req_col_num    : Number of columns the required block has
-// req_rcv_buf    : Receive buffer
+// *req_rcv_buf   : Receive buffer
 // req_rcv_buf_ld : Leading dimension of the received buffer
-void Buzz_requestBlockFromProcess(
+void Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int target_proc, 
 	int req_row_start, int req_row_num,
 	int req_col_start, int req_col_num,
 	void *req_rcv_buf, int req_rcv_buf_ld
 );
 
-// Request a block from all related processes using MPI_Get
+// Get a block from all related processes using MPI_Get
 // Non-blocking, data may not be ready before synchronization
+// *proc_req_cnt  : Array for counting how many MPI_Get requests a process has
 // req_row_start  : 1st row of the required block
 // req_row_num    : Number of rows the required block has
 // req_col_start  : 1st column of the required block
 // req_col_num    : Number of columns the required block has
-// req_rcv_buf    : Receive buffer
+// *req_rcv_buf   : Receive buffer
 // req_rcv_buf_ld : Leading dimension of the received buffer
-void Buzz_requestBlock(
-	Buzz_Matrix_t Buzz_mat,
+void Buzz_getBlock(
+	Buzz_Matrix_t Buzz_mat, int *proc_req_cnt, 
 	int req_row_start, int req_row_num,
 	int req_col_start, int req_col_num,
 	void *req_rcv_buf, int req_rcv_buf_ld
 );
+
+// Synchronize and complete all outstanding MPI_Get requests 
+// and reset the counter array
+// *proc_req_cnt  : Array for counting how many MPI_Get requests a process has
+void Buzz_completeAllGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt);
 
 #endif

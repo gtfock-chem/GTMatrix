@@ -11,8 +11,8 @@ int main(int argc, char **argv)
 	MPI_Init(&argc, &argv);
 	
 	int r_displs[5] = {0, 3, 6, 8, 12};
-	int c_displs[5] = {0, 2, 4, 6, 8};
-	int mat[96];
+	int c_displs[5] = {0, 4, 6, 8};
+	int mat[96], req_cnt[100];
 	
 	int my_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -22,10 +22,10 @@ int main(int argc, char **argv)
 	
 	Buzz_Matrix_t bm;
 	
-	// 4 * 4 proc grid, matrix size 10 * 10
+	// 4 * 3 proc grid, matrix size 10 * 10
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_INT, 4, my_rank, 12, 8, 
-		4, 4, &r_displs[0], &c_displs[0], NULL, 0
+		4, 3, &r_displs[0], &c_displs[0], NULL, 0
 	);
 	
 	// Set local data
@@ -35,12 +35,12 @@ int main(int argc, char **argv)
 	
 	// Start to fetch blocks from other processes
 	memset(&mat[0], 0, 4 * 96);
+	memset(&req_cnt[0], 0, 4 * 100);
 	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	if (my_rank == 0)
 	{
-		Buzz_requestBlock(bm, 0, 12, 0, 8, &mat[0], 8);
-		printf("Proc 0 ready to flush all\n");
-		MPI_Win_flush_all(bm->mpi_win);
+		Buzz_getBlock(bm, &req_cnt[0], 0, 12, 0, 8, &mat[0], 8);
+		Buzz_completeAllGetRequests(bm, &req_cnt[0]);
 		
 		print_int_mat(&mat[0], 8, 12, 8, "Full matrix");
 	}
@@ -54,9 +54,9 @@ int main(int argc, char **argv)
 	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	if (my_rank == 0)
 	{
-		Buzz_requestBlock(bm, 1, 5, 1, 5, &mat[9], 8);
-		Buzz_requestBlock(bm, 10, 2, 1, 7, &mat[81], 8);
-		MPI_Win_flush_all(bm->mpi_win);
+		Buzz_getBlock(bm, &req_cnt[0], 1, 5, 1, 5, &mat[9], 8);
+		Buzz_getBlock(bm, &req_cnt[0], 10, 2, 1, 7, &mat[81], 8);
+		Buzz_completeAllGetRequests(bm, &req_cnt[0]);
 		
 		print_int_mat(&mat[0], 8, 12, 8, "Full matrix");
 	}

@@ -151,7 +151,7 @@ void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 	MPI_Barrier(Buzz_mat->mpi_comm);
 }
 
-void Buzz_requestBlockFromProcess(
+void Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int target_proc, 
 	int req_row_start, int req_row_num,
 	int req_col_start, int req_col_num,
@@ -228,8 +228,8 @@ void getRectIntersection(
 	getSegmentIntersection(ys0, ye0, ys1, ye1, intersection, iys, iye);
 }
 
-void Buzz_requestBlock(
-	Buzz_Matrix_t Buzz_mat,
+void Buzz_getBlock(
+	Buzz_Matrix_t Buzz_mat, int *proc_req_cnt, 
 	int req_row_start, int req_row_num,
 	int req_col_start, int req_col_num,
 	void *req_rcv_buf, int req_rcv_buf_ld
@@ -275,10 +275,22 @@ void Buzz_requestBlock(
 			int col_dist  = blk_c_s - req_col_start;
 			char *blk_ptr = (char*) req_rcv_buf;
 			blk_ptr += (row_dist * req_rcv_buf_ld + col_dist) * bm->unit_size;
-			Buzz_requestBlockFromProcess(
+			Buzz_getBlockFromProcess(
 				bm, target_proc, blk_r_s, blk_r_num, 
 				blk_c_s, blk_c_num, blk_ptr, req_rcv_buf_ld
 			);
+			proc_req_cnt[target_proc] += blk_r_num;
 		}
 	}
+}
+
+void Buzz_completeAllGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt)
+{
+	Buzz_Matrix_t bm = Buzz_mat;
+	for (int i = 0; i < bm->comm_size; i++)
+		if (proc_req_cnt[i] > 0)
+		{
+			MPI_Win_flush(i, bm->mpi_win);
+			proc_req_cnt[i] = 0;
+		}
 }
