@@ -10,7 +10,7 @@ struct Buzz_Matrix
 	MPI_Win mpi_win;             // MPI window for distribute matrix
 	MPI_Info mpi_info;           // MPI info
 	MPI_Datatype datatype;       // Matrix data type
-	size_t unit_size;            // Size of matrix data type, unit is byte
+	int unit_size;               // Size of matrix data type, unit is byte
 	int my_rank, comm_size;      // Rank of this node and number of process in the communicator
 	int nrows, ncols;            // Matrix size
 	int r_blocks, c_blocks;      // Number of blocks on row and column directions, r_blocks * c_blocks == comm_size
@@ -20,14 +20,16 @@ struct Buzz_Matrix
 	int *c_displs, *c_blklens;   // Displacements and length of each block on column direction
 	int *ld_blks;                // Leading dimensions of each matrix block
 	int ld_local, mb_alloc;      // Local matrix block's leading dimension and if mat_block is allocated by Buzz_Matrix
-	void *mat_block;             // Pointer to local matrix block
-	void *recv_buff;             // Pointer to receive buffer
-	size_t rcvbuf_size;          // Size of recv_buff, unit is byte
+	void *mat_block;             // Local matrix block
+	void *recv_buff;             // Receive buffer
+	int rcvbuf_size;             // Size of recv_buff, unit is byte
+	int nthreads;                // Maximum number of thread that calls getBlock
+	int *proc_req_cnt;           // Array for counting how many MPI_Get requests 
 };
 
 typedef struct Buzz_Matrix* Buzz_Matrix_t;
 
-#define DEFAULE_RCV_BUF_SIZE 1048576  // 1M
+#define DEFAULE_RCV_BUF_SIZE 262144  // 32^2 * 16 * 8 bytes
 
 // Create and initialize a Buzz_Matrix structure
 // Each process has one matrix block, process ranks are arranged in row-major style
@@ -40,16 +42,18 @@ typedef struct Buzz_Matrix* Buzz_Matrix_t;
 // ncols      : Number of columns in matrix
 // r_blocks   : Number of blocks on row direction
 // c_blocks   : Number of blocks on column direction
-// *r_displs  : Pointer to row direction displacement array, should have nrows+1 elements
-// *c_displs  : Pointer to column direction displacement array, should have ncols+1 elements
-// *mat_block : Pointer to exist local matrix block, optional
+// *r_displs  : Row direction displacement array, nrows+1 elements
+// *c_displs  : Column direction displacement array, ncols+1 elements
+// *mat_block : Exist local matrix block, optional
 // ld_local   : Leading dimension of exist local matrix block, <= 0 will create 
 //              a new buffer for local matrix block and ld_local = c_blklens[my_colblk]
+// nthreads   : Maximum number of thread that calls getBlock
+// buf_size   : Receive buffer size (bytes) of each thread, <= 0 will use default value (256KB)
 void Buzz_createBuzzMatrix(
 	Buzz_Matrix_t *Buzz_mat, MPI_Comm comm, MPI_Datatype datatype,
-	size_t unit_size, int my_rank, int nrows, int ncols,
+	int unit_size, int my_rank, int nrows, int ncols,
 	int r_blocks, int c_blocks, int *r_displs, int *c_displs,
-	void *mat_block, int ld_local
+	void *mat_block, int ld_local, int nthreads, int buf_size
 );
 
 // Free a Buzz_Matrix structure
@@ -99,6 +103,30 @@ void Buzz_getBlock(
 // Synchronize and complete all outstanding MPI_Get requests 
 // and reset the counter array
 // *proc_req_cnt  : Array for counting how many MPI_Get requests a process has
-void Buzz_completeAllGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt);
+void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt);
+
+// Synchronize and complete all outstanding MPI_Get requests according to the 
+// counter array and reset the counter array
+// *proc_req_cnt  : Array for counting how many MPI_Get requests a process has
+void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt);
+
+// Get a list of blocks from all related processes using MPI_Get
+// nblocks          : Number of blocks to get
+// tid              : Thread ID
+// *req_row_start   : Array that stores 1st row of the required blocks
+// *req_row_num     : Array that stores Number of rows the required blocks has
+// *req_col_start   : Array that stores 1st column of the required blocks
+// *req_col_num     : Array that stores Number of columns the required blocks has
+// **thread_rcv_buf : Pointer to this thread's receive buffer. Blocks are stored //                    one by one without padding, req_col_num[i] is leading dimension
+void Buzz_getBlockList(
+	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
+	int *req_row_start, int *req_row_num,
+	int *req_col_start, int *req_col_num,
+	void **thread_rcv_buf
+);
+
+// Complete all outstanding MPI_Get requests from the same thread 
+// tid : Thread ID
+void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid);
 
 #endif
