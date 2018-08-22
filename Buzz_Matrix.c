@@ -307,7 +307,7 @@ void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt)
 		}
 }
 
-void Buzz_getBlockList(
+int Buzz_getBlockList(
 	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
 	int *req_row_start, int *req_row_num,
 	int *req_col_start, int *req_col_num,
@@ -316,7 +316,7 @@ void Buzz_getBlockList(
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	
-	if (nblocks <= 0) return;
+	if (nblocks <= 0) return 0;
 	
 	// Set the pointer to this thread's receive buffer
 	char *thread_rcv_ptr = (char*) bm->recv_buff;
@@ -324,17 +324,27 @@ void Buzz_getBlockList(
 	*thread_rcv_buf = thread_rcv_ptr;
 	
 	// Get each block
+	int ret = 0, recv_bytes = 0;
 	int *proc_req_cnt = bm->proc_req_cnt + bm->comm_size * tid;
 	for (int i = 0; i < nblocks; i++)
 	{
+		int block_bytes = bm->unit_size * req_row_num[i] * req_col_num[i];
+		if (recv_bytes + block_bytes > bm->rcvbuf_size)
+		{
+			ret = i;
+			break;
+		}
+		
 		Buzz_getBlock(
 			bm, proc_req_cnt, 
 			req_row_start[i], req_row_num[i],
 			req_col_start[i], req_col_num[i],
 			(void*) thread_rcv_ptr, req_col_num[i]
 		);
-		thread_rcv_ptr += bm->unit_size * req_row_num[i] * req_col_num[i];
+		thread_rcv_ptr += block_bytes;
 	}
+	
+	return ret;
 }
 
 void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid)
