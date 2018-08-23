@@ -183,12 +183,26 @@ void Buzz_getBlockFromProcess(
 	int recv_bytes = req_col_num * bm->unit_size;
 	int target_pos = (req_row_start - target_row_start) * target_blk_ld;
 	target_pos += req_col_start - target_col_start;
-	for (int irow = 0; irow < req_row_num; irow++)
+	if (target_proc != bm->my_rank)
 	{
-		MPI_Get(recv_ptr,   recv_bytes, MPI_BYTE, target_proc, 
-		        target_pos, recv_bytes, MPI_BYTE, bm->mpi_win);
-		recv_ptr   += req_rcv_buf_ld * bm->unit_size;
-		target_pos += target_blk_ld;
+		int recv_ptr_ld = req_rcv_buf_ld * bm->unit_size;
+		for (int irow = 0; irow < req_row_num; irow++)
+		{
+			MPI_Get(recv_ptr,   recv_bytes, MPI_BYTE, target_proc, 
+			        target_pos, recv_bytes, MPI_BYTE, bm->mpi_win);
+			recv_ptr   += recv_ptr_ld;
+			target_pos += target_blk_ld;
+		}
+	} else {
+		char *target_ptr = bm->mat_block + target_pos * bm->unit_size;
+		int recv_ptr_ld   = req_rcv_buf_ld * bm->unit_size;
+		int target_ptr_ld = target_blk_ld  * bm->unit_size;
+		for (int irow = 0; irow < req_row_num; irow++)
+		{
+			memcpy(recv_ptr, target_ptr, recv_bytes);
+			recv_ptr   += recv_ptr_ld;
+			target_ptr += target_ptr_ld;
+		}
 	}
 }
 
@@ -291,7 +305,7 @@ void Buzz_getBlock(
 				bm, target_proc, blk_r_s, blk_r_num, 
 				blk_c_s, blk_c_num, blk_ptr, req_rcv_buf_ld
 			);
-			proc_req_cnt[target_proc] += blk_r_num;
+			if (target_proc != bm->my_rank)	proc_req_cnt[target_proc] += blk_r_num;
 		}
 	}
 }
