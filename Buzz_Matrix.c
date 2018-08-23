@@ -324,7 +324,7 @@ int Buzz_getBlockList(
 	*thread_rcv_buf = thread_rcv_ptr;
 	
 	// Get each block
-	int ret = 0, recv_bytes = 0;
+	int ret = -1, recv_bytes = 0;
 	int *proc_req_cnt = bm->proc_req_cnt + bm->comm_size * tid;
 	for (int i = 0; i < nblocks; i++)
 	{
@@ -343,6 +343,7 @@ int Buzz_getBlockList(
 		);
 		thread_rcv_ptr += block_bytes;
 	}
+	if (ret == -1) ret = nblocks; 
 	
 	return ret;
 }
