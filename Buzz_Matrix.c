@@ -72,39 +72,51 @@ void Buzz_createBuzzMatrix(
 		printf("[FATAL] Buzz_Matrix: Invalid c_displs!\n");
 		assert(c_displs_valid == 1);
 	}
-	
-	// Bind or allocate local matrix block to MPI window
-	int mb_size;
 	bm->my_nrows = bm->r_blklens[bm->my_rowblk];
 	bm->my_ncols = bm->c_blklens[bm->my_colblk];
-	bm->ld_blks  = (int*) malloc(sizeof(int) * bm->comm_size);
-	assert(bm->ld_blks != NULL);
-	if (ld_local > 0)
-	{
-		mb_size = unit_size * ((bm->my_nrows - 1) * ld_local + bm->my_ncols);
-		bm->mat_block = mat_block;
-		bm->ld_local  = ld_local;
-		bm->mb_alloc  = 0;
-	} else {
-		mb_size = unit_size * bm->my_nrows * bm->my_ncols;
-		
-		bm->mat_block = (void*) malloc(mb_size);
-		assert(bm->mat_block != NULL);
-		
-		bm->ld_local = bm->c_blklens[bm->my_colblk];
-		bm->mb_alloc = 1;
-	}
+	bm->ld_local = bm->my_ncols;
+	
+	// Allocate shared memory and its MPI window
+	// (1) Split communicator to get shared memory communicator
+	MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &bm->shm_comm);
+	MPI_Comm_rank(bm->shm_comm, &bm->shm_rank);
+	MPI_Comm_size(bm->shm_comm, &bm->shm_size);
+	bm->shm_global_ranks = (int*) malloc(sizeof(int)   * bm->shm_size);
+	assert(bm->shm_global_ranks != NULL);
+	MPI_Allgather(&bm->shm_rank, 1, MPI_INT, bm->shm_global_ranks, 1, MPI_INT, bm->shm_comm);
+	// (2) Allocate shared memory 
+	int my_block_size, shm_max_block_size, shm_mb_bytes;
+	my_block_size = bm->my_nrows * bm->my_ncols;
+	MPI_Allreduce(&my_block_size, &shm_max_block_size, 1, MPI_INT, MPI_MAX, bm->shm_comm);
+	shm_mb_bytes = shm_max_block_size * bm->shm_size * unit_size;
+	MPI_Info_create(&bm->shm_info);
+	MPI_Info_set(bm->shm_info, "alloc_shared_noncontig", "true");
+	MPI_Win_allocate_shared(
+		shm_mb_bytes, unit_size, bm->shm_info, bm->shm_comm, 
+		&bm->mat_block, &bm->shm_win
+	);
+	// (3) Get pointers of all processes in the shared memory communicator
+	MPI_Aint _size;
+	int _disp;
+	bm->shm_mat_blocks = (void**) malloc(sizeof(void*) * bm->shm_size);
+	assert(bm->shm_global_ranks != NULL);
+	for (int i = 0; i < bm->shm_size; i++)
+		MPI_Win_shared_query(bm->shm_win, i, &_size, &_disp, &bm->shm_mat_blocks[i]);
+
+	// Bind local matrix block to global MPI window
 	MPI_Info_create(&bm->mpi_info);
-	MPI_Win_create(bm->mat_block, mb_size, bm->unit_size, bm->mpi_info, bm->mpi_comm, &bm->mpi_win);
+	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, bm->mpi_info, bm->mpi_comm, &bm->mpi_win);
+	bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
+	assert(bm->ld_blks != NULL);
 	MPI_Allgather(&bm->ld_local, 1, MPI_INT, bm->ld_blks, 1, MPI_INT, bm->mpi_comm);
 	
 	// Allocate space for receive buffer
 	if (buf_size <= 0) buf_size = DEFAULE_RCV_BUF_SIZE;
 	bm->rcvbuf_size  = buf_size;
 	bm->recv_buff    = (void*) malloc(nthreads * bm->rcvbuf_size);
-	bm->proc_req_cnt = (int*)  malloc(sizeof(int) * nthreads * bm->comm_size);
-	assert(bm->recv_buff != NULL && bm->proc_req_cnt != NULL);
-	memset(bm->proc_req_cnt, 0, sizeof(int) * comm_size * nthreads);
+	bm->proc_cnt = (int*)  malloc(sizeof(int) * nthreads * bm->comm_size);
+	assert(bm->recv_buff != NULL && bm->proc_cnt != NULL);
+	memset(bm->proc_cnt, 0, sizeof(int) * comm_size * nthreads);
 	
 	*Buzz_mat = bm;
 }
@@ -114,7 +126,12 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 	assert(bm != NULL);
 	
-	MPI_Win_free(&bm->mpi_win);
+	MPI_Win_free (&bm->mpi_win);
+	MPI_Win_free (&bm->shm_win);
+	MPI_Comm_free(&bm->mpi_comm);
+	MPI_Comm_free(&bm->shm_comm);
+	MPI_Info_free(&bm->mpi_info);
+	MPI_Info_free(&bm->shm_info);
 	
 	free(bm->r_displs);
 	free(bm->r_blklens);
@@ -122,10 +139,10 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->c_blklens);
 	free(bm->ld_blks);
 	free(bm->recv_buff);
-	free(bm->proc_req_cnt);
-	if (bm->mb_alloc) free(bm->mat_block);
+	free(bm->proc_cnt);
+	free(bm->shm_global_ranks);
+	free(bm->shm_mat_blocks);
 	
-	MPI_Comm_free(&bm->mpi_comm);
 	bm->unit_size   = 0;
 	bm->my_rank     = 0;
 	bm->comm_size   = 0;
@@ -137,7 +154,6 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	bm->my_colblk   = 0;
 	bm->rcvbuf_size = 0;
 	bm->ld_local    = 0;
-	bm->mb_alloc    = 0;
 	
 	free(bm);
 }
@@ -146,62 +162,76 @@ void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
 	MPI_Barrier(Buzz_mat->mpi_comm);
 	MPI_Win_lock_all(0, Buzz_mat->mpi_win);
+	MPI_Win_lock_all(0, Buzz_mat->shm_win);
 }
 
 void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
+	MPI_Win_unlock_all(Buzz_mat->shm_win);
 	MPI_Win_unlock_all(Buzz_mat->mpi_win);
 	MPI_Barrier(Buzz_mat->mpi_comm);
 }
 
 void Buzz_getBlockFromProcess(
-	Buzz_Matrix_t Buzz_mat, int target_proc, 
-	int req_row_start, int req_row_num,
-	int req_col_start, int req_col_num,
-	void *req_rcv_buf, int req_rcv_buf_ld
+	Buzz_Matrix_t Buzz_mat, int dst_proc, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *rcv_buf, int rcv_buf_ld
 )
 {
 	Buzz_Matrix_t bm  = Buzz_mat;
-	int target_rowblk = target_proc / bm->c_blocks;
-	int target_colblk = target_proc % bm->c_blocks;
-	int target_blk_ld = bm->ld_blks[target_proc];
-	int target_row_start = bm->r_displs[target_rowblk];
-	int target_col_start = bm->c_displs[target_colblk];
-	int req_row_end    = req_row_start + req_row_num;
-	int req_col_end    = req_col_start + req_col_num;
-	int target_row_end = bm->r_displs[target_rowblk + 1];
-	int target_col_end = bm->c_displs[target_colblk + 1];
+	int row_end       = row_start + row_num;
+	int col_end       = col_start + col_num;
+	int dst_rowblk    = dst_proc / bm->c_blocks;
+	int dst_colblk    = dst_proc % bm->c_blocks;
+	int dst_blk_ld    = bm->ld_blks[dst_proc];
+	int dst_row_start = bm->r_displs[dst_rowblk];
+	int dst_col_start = bm->c_displs[dst_colblk];
+	int dst_row_end   = bm->r_displs[dst_rowblk + 1];
+	int dst_col_end   = bm->c_displs[dst_colblk + 1];
 	
 	// Sanity check
-	if ((req_row_start < target_row_start) ||
-	    (req_col_start < target_col_start) ||
-	    (req_row_end   > target_row_end)   ||
-	    (req_col_end   > target_col_end)) return;
+	if ((row_start < dst_row_start) ||
+	    (col_start < dst_col_start) ||
+	    (row_end   > dst_row_end)   ||
+	    (col_end   > dst_col_end)   ||
+		(row_num   * col_num == 0)) return;
 	
-	// Start RMA requests
-	char *recv_ptr = (char*) req_rcv_buf;
-	int recv_bytes = req_col_num * bm->unit_size;
-	int target_pos = (req_row_start - target_row_start) * target_blk_ld;
-	target_pos += req_col_start - target_col_start;
-	if (target_proc != bm->my_rank)
-	{
-		int recv_ptr_ld = req_rcv_buf_ld * bm->unit_size;
-		for (int irow = 0; irow < req_row_num; irow++)
+	// Check if the target process is in the shared memory communicator
+	int  shm_target = -1;
+	void *shm_ptr   = NULL;
+	for (int i = 0; i < bm->shm_size; i++)
+		if (bm->shm_global_ranks[i] == dst_proc)
 		{
-			MPI_Get(recv_ptr,   recv_bytes, MPI_BYTE, target_proc, 
-			        target_pos, recv_bytes, MPI_BYTE, bm->mpi_win);
-			recv_ptr   += recv_ptr_ld;
-			target_pos += target_blk_ld;
+			shm_target = i;
+			shm_ptr = bm->shm_mat_blocks[i];
+			break;
+		}
+		
+	// Use memcpy instead of MPI_Get for shared memory window
+	char *recv_ptr = (char*) rcv_buf;
+	int recv_bytes = col_num * bm->unit_size;
+	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
+	dst_pos += col_start - dst_col_start;
+	if (shm_target != -1) 
+	{
+		char *dst_ptr   = shm_ptr + dst_pos * bm->unit_size;
+		int recv_ptr_ld = rcv_buf_ld * bm->unit_size;
+		int dst_ptr_ld  = dst_blk_ld * bm->unit_size;
+		for (int irow = 0; irow < row_num; irow++)
+		{
+			memcpy(recv_ptr, dst_ptr, recv_bytes);
+			recv_ptr += recv_ptr_ld;
+			dst_ptr  += dst_ptr_ld;
 		}
 	} else {
-		char *target_ptr = bm->mat_block + target_pos * bm->unit_size;
-		int recv_ptr_ld   = req_rcv_buf_ld * bm->unit_size;
-		int target_ptr_ld = target_blk_ld  * bm->unit_size;
-		for (int irow = 0; irow < req_row_num; irow++)
+		int recv_ptr_ld = rcv_buf_ld * bm->unit_size;
+		for (int irow = 0; irow < row_num; irow++)
 		{
-			memcpy(recv_ptr, target_ptr, recv_bytes);
-			recv_ptr   += recv_ptr_ld;
-			target_ptr += target_ptr_ld;
+			MPI_Get(recv_ptr, recv_bytes, MPI_BYTE, dst_proc, 
+			        dst_pos,  recv_bytes, MPI_BYTE, bm->mpi_win);
+			recv_ptr += recv_ptr_ld;
+			dst_pos  += dst_blk_ld;
 		}
 	}
 }
@@ -218,8 +248,8 @@ void getSegmentIntersection(int s0, int e0, int s1, int e1, int *intersection, i
 	
 	if (s1 > e0)  // No intersection
 	{
-		*is = s1;
-		*ie = s1 - 1;
+		*is = -1;
+		*ie = -1;
 		*intersection = 0;
 		return;
 	}
@@ -246,85 +276,86 @@ void getRectIntersection(
 }
 
 void Buzz_getBlock(
-	Buzz_Matrix_t Buzz_mat, int *proc_req_cnt, 
-	int req_row_start, int req_row_num,
-	int req_col_start, int req_col_num,
-	void *req_rcv_buf, int req_rcv_buf_ld
+	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *rcv_buf, int rcv_buf_ld
 )
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	
 	// Sanity check
-	if ((req_row_start < 0) || (req_col_start < 0) ||
-	    (req_row_start + req_row_num > bm->nrows)  ||
-	    (req_col_start + req_col_num > bm->ncols)) return;
+	if ((row_start < 0) || (col_start < 0) ||
+	    (row_start + row_num > bm->nrows)  ||
+	    (col_start + col_num > bm->ncols)  ||
+		(row_num * col_num == 0)) return;
 	
 	// Find the processes that contain the requested block
 	int s_blk_r, e_blk_r, s_blk_c, e_blk_c;
-	int req_row_end = req_row_start + req_row_num - 1;
-	int req_col_end = req_col_start + req_col_num - 1;
+	int row_end = row_start + row_num - 1;
+	int col_end = col_start + col_num - 1;
 	for (int i = 0; i < bm->r_blocks; i++)
 	{
-		if ((bm->r_displs[i] <= req_row_start) && 
-		    (req_row_start < bm->r_displs[i+1])) s_blk_r = i;
-		if ((bm->r_displs[i] <= req_row_end)   && 
-		    (req_row_end   < bm->r_displs[i+1])) e_blk_r = i;
+		if ((bm->r_displs[i] <= row_start) && 
+		    (row_start < bm->r_displs[i+1])) s_blk_r = i;
+		if ((bm->r_displs[i] <= row_end)   && 
+		    (row_end   < bm->r_displs[i+1])) e_blk_r = i;
 	}
 	for (int i = 0; i < bm->c_blocks; i++)
 	{
-		if ((bm->c_displs[i] <= req_col_start) && 
-		    (req_col_start < bm->c_displs[i+1])) s_blk_c = i;
-		if ((bm->c_displs[i] <= req_col_end)   && 
-		    (req_col_end   < bm->c_displs[i+1])) e_blk_c = i;
+		if ((bm->c_displs[i] <= col_start) && 
+		    (col_start < bm->c_displs[i+1])) s_blk_c = i;
+		if ((bm->c_displs[i] <= col_end)   && 
+		    (col_end   < bm->c_displs[i+1])) e_blk_c = i;
 	}
 	
 	// Fetch data from each process
 	int blk_r_s, blk_r_e, blk_c_s, blk_c_e, need_to_fetch;
 	for (int blk_r = s_blk_r; blk_r <= e_blk_r; blk_r++)      // Notice: <=
 	{
-		int target_r_s = bm->r_displs[blk_r];
-		int target_r_e = bm->r_displs[blk_r + 1] - 1;
+		int dst_r_s = bm->r_displs[blk_r];
+		int dst_r_e = bm->r_displs[blk_r + 1] - 1;
 		for (int blk_c = s_blk_c; blk_c <= e_blk_c; blk_c++)  // Notice: <=
 		{
-			int target_c_s  = bm->c_displs[blk_c];
-			int target_c_e  = bm->c_displs[blk_c + 1] - 1;
-			int target_proc = blk_r * bm->c_blocks + blk_c;
+			int dst_c_s  = bm->c_displs[blk_c];
+			int dst_c_e  = bm->c_displs[blk_c + 1] - 1;
+			int dst_proc = blk_r * bm->c_blocks + blk_c;
 			getRectIntersection(
-				target_r_s,    target_r_e,  target_c_s,    target_c_e,
-				req_row_start, req_row_end, req_col_start, req_col_end,
+				dst_r_s,   dst_r_e, dst_c_s,   dst_c_e,
+				row_start, row_end, col_start, col_end,
 				&need_to_fetch, &blk_r_s, &blk_r_e, &blk_c_s, &blk_c_e
 			);
 			assert(need_to_fetch == 1);
 			int blk_r_num = blk_r_e - blk_r_s + 1;
 			int blk_c_num = blk_c_e - blk_c_s + 1;
-			int row_dist  = blk_r_s - req_row_start;
-			int col_dist  = blk_c_s - req_col_start;
-			char *blk_ptr = (char*) req_rcv_buf;
-			blk_ptr += (row_dist * req_rcv_buf_ld + col_dist) * bm->unit_size;
+			int row_dist  = blk_r_s - row_start;
+			int col_dist  = blk_c_s - col_start;
+			char *blk_ptr = (char*) rcv_buf;
+			blk_ptr += (row_dist * rcv_buf_ld + col_dist) * bm->unit_size;
 			Buzz_getBlockFromProcess(
-				bm, target_proc, blk_r_s, blk_r_num, 
-				blk_c_s, blk_c_num, blk_ptr, req_rcv_buf_ld
+				bm, dst_proc, blk_r_s, blk_r_num, 
+				blk_c_s, blk_c_num, blk_ptr, rcv_buf_ld
 			);
-			if (target_proc != bm->my_rank)	proc_req_cnt[target_proc] += blk_r_num;
+			if (dst_proc != bm->my_rank) proc_cnt[dst_proc] += blk_r_num;
 		}
 	}
 }
 
-void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_req_cnt)
+void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	for (int i = 0; i < bm->comm_size; i++)
-		if (proc_req_cnt[i] > 0)
+		if (proc_cnt[i] > 0)
 		{
 			MPI_Win_flush(i, bm->mpi_win);
-			proc_req_cnt[i] = 0;
+			proc_cnt[i] = 0;
 		}
 }
 
 int Buzz_getBlockList(
 	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
-	int *req_row_start, int *req_row_num,
-	int *req_col_start, int *req_col_num,
+	int *row_start, int *row_num,
+	int *col_start, int *col_num,
 	void **thread_rcv_buf
 )
 {
@@ -339,10 +370,10 @@ int Buzz_getBlockList(
 	
 	// Get each block
 	int ret = -1, recv_bytes = 0;
-	int *proc_req_cnt = bm->proc_req_cnt + bm->comm_size * tid;
+	int *proc_cnt = bm->proc_cnt + bm->comm_size * tid;
 	for (int i = 0; i < nblocks; i++)
 	{
-		int block_bytes = bm->unit_size * req_row_num[i] * req_col_num[i];
+		int block_bytes = bm->unit_size * row_num[i] * col_num[i];
 		if (recv_bytes + block_bytes > bm->rcvbuf_size)
 		{
 			ret = i;
@@ -350,10 +381,8 @@ int Buzz_getBlockList(
 		}
 		
 		Buzz_getBlock(
-			bm, proc_req_cnt, 
-			req_row_start[i], req_row_num[i],
-			req_col_start[i], req_col_num[i],
-			(void*) thread_rcv_ptr, req_col_num[i]
+			bm, proc_cnt, row_start[i], row_num[i],
+			col_start[i], col_num[i], (void*) thread_rcv_ptr, col_num[i]
 		);
 		thread_rcv_ptr += block_bytes;
 	}
@@ -364,7 +393,7 @@ int Buzz_getBlockList(
 
 void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid)
 {
-	Buzz_Matrix_t bm  = Buzz_mat;
-	int *proc_req_cnt = bm->proc_req_cnt + bm->comm_size * tid;
-	Buzz_flushProcListGetRequests(bm, proc_req_cnt);
+	Buzz_Matrix_t bm = Buzz_mat;
+	int *proc_cnt = bm->proc_cnt + bm->comm_size * tid;
+	Buzz_flushProcListGetRequests(bm, proc_cnt);
 }
