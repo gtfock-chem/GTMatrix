@@ -6,14 +6,12 @@
 // Distributed matrix, 2D checkerboard partition, no cyclic 
 struct Buzz_Matrix
 {
+	// MPI components
 	MPI_Comm mpi_comm, shm_comm; // Target communicator
 	MPI_Win  mpi_win,  shm_win;  // MPI window for distribute matrix
-	MPI_Info mpi_info, shm_info; // MPI info
 	MPI_Datatype datatype;       // Matrix data type
-	int unit_size;               // Size of matrix data type, unit is byte
-	int my_rank, comm_size;      // Rank of this process and number of process in the global communicator
-	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator
-	int *shm_global_ranks;       // Global ranks (in mpi_comm) of the processes in shm_comm
+	
+	// Matrix size and partition
 	int nrows, ncols;            // Matrix size
 	int r_blocks,  c_blocks;     // Number of blocks on row and column directions, r_blocks * c_blocks == comm_size
 	int my_rowblk, my_colblk;    // Which row & column block this process is
@@ -22,12 +20,20 @@ struct Buzz_Matrix
 	int *c_displs, *c_blklens;   // Displacements and length of each block on column direction
 	int *ld_blks;                // Leading dimensions of each matrix block
 	int ld_local;                // Local matrix block's leading dimension
+	
+	// MPI Global window
+	int unit_size;               // Size of matrix data type, unit is byte
+	int my_rank, comm_size;      // Rank of this process and number of process in the global communicator
 	void *mat_block;             // Local matrix block
 	void *recv_buff;             // Receive buffer
-	void **shm_mat_blocks;       // Arrays of all shared memory ranks' pointers
 	int rcvbuf_size;             // Size of recv_buff, unit is byte
-	int nthreads;                // Maximum number of thread that calls getBlock
 	int *proc_cnt;               // Array for counting how many MPI_Get requests 
+	int nthreads;                // Maximum number of thread that calls getBlock
+	
+	// MPI Shared memory window
+	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator
+	int *shm_global_ranks;       // Global ranks (in mpi_comm) of the processes in shm_comm
+	void **shm_mat_blocks;       // Arrays of all shared memory ranks' pointers
 };
 
 typedef struct Buzz_Matrix* Buzz_Matrix_t;
@@ -47,16 +53,13 @@ typedef struct Buzz_Matrix* Buzz_Matrix_t;
 // [in]  c_blocks   : Number of blocks on column direction
 // [in]  *r_displs  : Row direction displacement array, nrows+1 elements
 // [in]  *c_displs  : Column direction displacement array, ncols+1 elements
-// [in]  *mat_block : Exist local matrix block, optional
-// [in]  ld_local   : Leading dimension of exist local matrix block, <= 0 will create 
-//                    a new buffer for local matrix block and ld_local = c_blklens[my_colblk]
 // [in]  nthreads   : Maximum number of thread that calls getBlock
 // [in]  buf_size   : Receive buffer size (bytes) of each thread, <= 0 will use default value (256KB)
 void Buzz_createBuzzMatrix(
 	Buzz_Matrix_t *Buzz_mat, MPI_Comm comm, MPI_Datatype datatype,
 	int unit_size, int my_rank, int nrows, int ncols,
 	int r_blocks, int c_blocks, int *r_displs, int *c_displs,
-	void *mat_block, int ld_local, int nthreads, int buf_size
+	int nthreads, int buf_size
 );
 
 // Free a Buzz_Matrix structure

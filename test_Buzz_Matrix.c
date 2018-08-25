@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	// 4 * 3 proc grid, matrix size 10 * 10
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_INT, 4, my_rank, 12, 8, 
-		4, 3, &r_displs[0], &c_displs[0], NULL, 0, 2, 0
+		4, 3, &r_displs[0], &c_displs[0], 2, 0
 	);
 	
 	// Set local data

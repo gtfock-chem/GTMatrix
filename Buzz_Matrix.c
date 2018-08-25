@@ -10,7 +10,7 @@ void Buzz_createBuzzMatrix(
 	Buzz_Matrix_t *Buzz_mat, MPI_Comm comm, MPI_Datatype datatype,
 	int unit_size, int my_rank, int nrows, int ncols,
 	int r_blocks, int c_blocks, int *r_displs, int *c_displs,
-	void *mat_block, int ld_local, int nthreads, int buf_size
+	int nthreads, int buf_size
 )
 {
 	Buzz_Matrix_t bm = (Buzz_Matrix_t) malloc(sizeof(struct Buzz_Matrix));
@@ -89,12 +89,14 @@ void Buzz_createBuzzMatrix(
 	my_block_size = bm->my_nrows * bm->my_ncols;
 	MPI_Allreduce(&my_block_size, &shm_max_block_size, 1, MPI_INT, MPI_MAX, bm->shm_comm);
 	shm_mb_bytes = shm_max_block_size * bm->shm_size * unit_size;
-	MPI_Info_create(&bm->shm_info);
-	MPI_Info_set(bm->shm_info, "alloc_shared_noncontig", "true");
+	MPI_Info shm_info;
+	MPI_Info_create(&shm_info);
+	MPI_Info_set(shm_info, "alloc_shared_noncontig", "true");
 	MPI_Win_allocate_shared(
-		shm_mb_bytes, unit_size, bm->shm_info, bm->shm_comm, 
+		shm_mb_bytes, unit_size, shm_info, bm->shm_comm, 
 		&bm->mat_block, &bm->shm_win
 	);
+	MPI_Info_free(&shm_info);
 	// (3) Get pointers of all processes in the shared memory communicator
 	MPI_Aint _size;
 	int _disp;
@@ -104,11 +106,13 @@ void Buzz_createBuzzMatrix(
 		MPI_Win_shared_query(bm->shm_win, i, &_size, &_disp, &bm->shm_mat_blocks[i]);
 
 	// Bind local matrix block to global MPI window
-	MPI_Info_create(&bm->mpi_info);
-	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, bm->mpi_info, bm->mpi_comm, &bm->mpi_win);
+	MPI_Info mpi_info;
+	MPI_Info_create(&mpi_info);
+	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, mpi_info, bm->mpi_comm, &bm->mpi_win);
 	bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
 	assert(bm->ld_blks != NULL);
 	MPI_Allgather(&bm->ld_local, 1, MPI_INT, bm->ld_blks, 1, MPI_INT, bm->mpi_comm);
+	MPI_Info_free(&mpi_info);
 	
 	// Allocate space for receive buffer
 	if (buf_size <= 0) buf_size = DEFAULE_RCV_BUF_SIZE;
@@ -126,12 +130,10 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 	assert(bm != NULL);
 	
-	MPI_Win_free (&bm->mpi_win);
-	MPI_Win_free (&bm->shm_win);
+	MPI_Win_free(&bm->mpi_win);
+	MPI_Win_free(&bm->shm_win);
 	MPI_Comm_free(&bm->mpi_comm);
 	MPI_Comm_free(&bm->shm_comm);
-	MPI_Info_free(&bm->mpi_info);
-	MPI_Info_free(&bm->shm_info);
 	
 	free(bm->r_displs);
 	free(bm->r_blklens);
@@ -142,18 +144,6 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->proc_cnt);
 	free(bm->shm_global_ranks);
 	free(bm->shm_mat_blocks);
-	
-	bm->unit_size   = 0;
-	bm->my_rank     = 0;
-	bm->comm_size   = 0;
-	bm->nrows       = 0;
-	bm->ncols       = 0;
-	bm->r_blocks    = 0;
-	bm->c_blocks    = 0;
-	bm->my_rowblk   = 0;
-	bm->my_colblk   = 0;
-	bm->rcvbuf_size = 0;
-	bm->ld_local    = 0;
 	
 	free(bm);
 }
