@@ -34,11 +34,16 @@ struct Buzz_Matrix
 	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator
 	int *shm_global_ranks;       // Global ranks (in mpi_comm) of the processes in shm_comm
 	void **shm_mat_blocks;       // Arrays of all shared memory ranks' pointers
+	
+	// Predefined small block data types
+	MPI_Datatype *sb_stride;     // Data type for stride != columns 
+	MPI_Datatype *sb_nostride;   // Data type for stride == columns 
 };
 
 typedef struct Buzz_Matrix* Buzz_Matrix_t;
 
 #define DEFAULE_RCV_BUF_SIZE 262144  // 32^2 * 16 * 8 bytes
+#define MPI_DT_SB_DIM_MAX    16
 
 // Create and initialize a Buzz_Matrix structure
 // Each process has one matrix block, process ranks are arranged in row-major style

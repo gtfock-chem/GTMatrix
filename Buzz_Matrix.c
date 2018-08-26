@@ -125,6 +125,31 @@ void Buzz_createBuzzMatrix(
 	assert(bm->recv_buff != NULL && bm->proc_cnt != NULL);
 	memset(bm->proc_cnt, 0, sizeof(int) * comm_size * nthreads);
 	
+	// Define small block data types
+	bm->sb_stride   = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
+	bm->sb_nostride = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
+	assert(bm->sb_stride != NULL && bm->sb_nostride != NULL);
+	for (int irow = 0; irow < MPI_DT_SB_DIM_MAX; irow++)
+	{
+		for (int icol = 0; icol < MPI_DT_SB_DIM_MAX; icol++)
+		{
+			int id = irow * MPI_DT_SB_DIM_MAX + icol;
+			if (irow == 0 && icol == 0) 
+			{
+				// Single element, use the original data type
+				MPI_Type_dup(datatype, &bm->sb_stride[id]);
+				MPI_Type_dup(datatype, &bm->sb_nostride[id]);
+				MPI_Type_commit(&bm->sb_stride[id]);
+				MPI_Type_commit(&bm->sb_nostride[id]);
+			} else {
+				MPI_Type_vector(irow + 1, icol + 1, bm->ld_local, datatype, &bm->sb_stride[id]);
+				MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &bm->sb_nostride[id]);
+				MPI_Type_commit(&bm->sb_stride[id]);
+				MPI_Type_commit(&bm->sb_nostride[id]);
+			}
+		}
+	}
+	
 	*Buzz_mat = bm;
 }
 
@@ -147,6 +172,14 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->proc_cnt);
 	free(bm->shm_global_ranks);
 	free(bm->shm_mat_blocks);
+	
+	for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
+	{
+		MPI_Type_free(&bm->sb_stride[i]);
+		MPI_Type_free(&bm->sb_nostride[i]);
+	}
+	free(bm->sb_stride);
+	free(bm->sb_nostride);
 	
 	free(bm);
 }
@@ -219,12 +252,34 @@ void Buzz_getBlockFromProcess(
 		}
 	} else {
 		int recv_ptr_ld = rcv_buf_ld * bm->unit_size;
-		for (int irow = 0; irow < row_num; irow++)
+		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)
 		{
-			MPI_Get(recv_ptr, recv_bytes, MPI_BYTE, dst_proc, 
-			        dst_pos,  recv_bytes, MPI_BYTE, bm->mpi_win);
-			recv_ptr += recv_ptr_ld;
-			dst_pos  += dst_blk_ld;
+			int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
+			MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
+			if (col_num == rcv_buf_ld)
+			{
+				MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
+				MPI_Get(recv_ptr, 1, *rcv_dt_ns, dst_proc, dst_pos, 1, *dst_dt, bm->mpi_win);
+			} else {
+				if (col_num == bm->ld_local)
+				{
+					MPI_Get(recv_ptr, 1, *dst_dt, dst_proc, dst_pos, 1, *dst_dt, bm->mpi_win);
+				} else {
+					MPI_Datatype rcv_dt;
+					MPI_Type_vector(row_num, col_num, rcv_buf_ld, bm->datatype, &rcv_dt);
+					MPI_Type_commit(&rcv_dt);
+					MPI_Get(recv_ptr, 1, rcv_dt, dst_proc, dst_pos, 1, *dst_dt, bm->mpi_win);
+					MPI_Type_free(&rcv_dt);
+				}
+			}
+		} else {
+			for (int irow = 0; irow < row_num; irow++)
+			{
+				MPI_Get(recv_ptr, recv_bytes, MPI_BYTE, dst_proc, 
+						dst_pos,  recv_bytes, MPI_BYTE, bm->mpi_win);
+				recv_ptr += recv_ptr_ld;
+				dst_pos  += dst_blk_ld;
+			}
 		}
 	}
 }
