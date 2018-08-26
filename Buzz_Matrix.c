@@ -74,7 +74,9 @@ void Buzz_createBuzzMatrix(
 	}
 	bm->my_nrows = bm->r_blklens[bm->my_rowblk];
 	bm->my_ncols = bm->c_blklens[bm->my_colblk];
-	bm->ld_local = bm->my_ncols;
+	// bm->ld_local = bm->my_ncols;
+	// Use the same local leading dimension for all processes
+	MPI_Allreduce(&bm->my_ncols, &bm->ld_local, 1, MPI_INT, MPI_MAX, bm->mpi_comm);
 	
 	// Allocate shared memory and its MPI window
 	// (1) Split communicator to get shared memory communicator
@@ -87,7 +89,7 @@ void Buzz_createBuzzMatrix(
 	// (2) Allocate shared memory 
 	int shm_max_nrow, shm_max_ncol, shm_mb_bytes;
 	MPI_Allreduce(&bm->my_nrows, &shm_max_nrow, 1, MPI_INT, MPI_MAX, bm->shm_comm);
-	MPI_Allreduce(&bm->my_ncols, &shm_max_ncol, 1, MPI_INT, MPI_MAX, bm->shm_comm);
+	MPI_Allreduce(&bm->ld_local, &shm_max_ncol, 1, MPI_INT, MPI_MAX, bm->shm_comm);
 	shm_mb_bytes = shm_max_ncol * shm_max_nrow * bm->shm_size * unit_size;
 	MPI_Info shm_info;
 	MPI_Info_create(&shm_info);
