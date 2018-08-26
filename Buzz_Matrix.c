@@ -83,12 +83,12 @@ void Buzz_createBuzzMatrix(
 	MPI_Comm_size(bm->shm_comm, &bm->shm_size);
 	bm->shm_global_ranks = (int*) malloc(sizeof(int)   * bm->shm_size);
 	assert(bm->shm_global_ranks != NULL);
-	MPI_Allgather(&bm->shm_rank, 1, MPI_INT, bm->shm_global_ranks, 1, MPI_INT, bm->shm_comm);
+	MPI_Allgather(&bm->my_rank, 1, MPI_INT, bm->shm_global_ranks, 1, MPI_INT, bm->shm_comm);
 	// (2) Allocate shared memory 
-	int my_block_size, shm_max_block_size, shm_mb_bytes;
-	my_block_size = bm->my_nrows * bm->my_ncols;
-	MPI_Allreduce(&my_block_size, &shm_max_block_size, 1, MPI_INT, MPI_MAX, bm->shm_comm);
-	shm_mb_bytes = shm_max_block_size * bm->shm_size * unit_size;
+	int shm_max_nrow, shm_max_ncol, shm_mb_bytes;
+	MPI_Allreduce(&bm->my_nrows, &shm_max_nrow, 1, MPI_INT, MPI_MAX, bm->shm_comm);
+	MPI_Allreduce(&bm->my_ncols, &shm_max_ncol, 1, MPI_INT, MPI_MAX, bm->shm_comm);
+	shm_mb_bytes = shm_max_ncol * shm_max_nrow * bm->shm_size * unit_size;
 	MPI_Info shm_info;
 	MPI_Info_create(&shm_info);
 	MPI_Info_set(shm_info, "alloc_shared_noncontig", "true");
@@ -108,6 +108,7 @@ void Buzz_createBuzzMatrix(
 	// Bind local matrix block to global MPI window
 	MPI_Info mpi_info;
 	MPI_Info_create(&mpi_info);
+	int my_block_size = bm->my_nrows * bm->my_ncols;
 	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, mpi_info, bm->mpi_comm, &bm->mpi_win);
 	bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
 	assert(bm->ld_blks != NULL);
