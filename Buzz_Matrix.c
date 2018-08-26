@@ -81,7 +81,7 @@ void Buzz_createBuzzMatrix(
 	MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &bm->shm_comm);
 	MPI_Comm_rank(bm->shm_comm, &bm->shm_rank);
 	MPI_Comm_size(bm->shm_comm, &bm->shm_size);
-	bm->shm_global_ranks = (int*) malloc(sizeof(int)   * bm->shm_size);
+	bm->shm_global_ranks = (int*) malloc(sizeof(int) * bm->shm_size);
 	assert(bm->shm_global_ranks != NULL);
 	MPI_Allgather(&bm->my_rank, 1, MPI_INT, bm->shm_global_ranks, 1, MPI_INT, bm->shm_comm);
 	// (2) Allocate shared memory 
@@ -108,7 +108,7 @@ void Buzz_createBuzzMatrix(
 	// Bind local matrix block to global MPI window
 	MPI_Info mpi_info;
 	MPI_Info_create(&mpi_info);
-	int my_block_size = bm->my_nrows * bm->my_ncols;
+	int my_block_size = bm->my_nrows * shm_max_ncol;
 	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, mpi_info, bm->mpi_comm, &bm->mpi_win);
 	bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
 	assert(bm->ld_blks != NULL);
@@ -118,8 +118,8 @@ void Buzz_createBuzzMatrix(
 	// Allocate space for receive buffer
 	if (buf_size <= 0) buf_size = DEFAULE_RCV_BUF_SIZE;
 	bm->rcvbuf_size  = buf_size;
-	bm->recv_buff    = (void*) malloc(nthreads * bm->rcvbuf_size);
-	bm->proc_cnt = (int*)  malloc(sizeof(int) * nthreads * bm->comm_size);
+	bm->recv_buff = (void*) malloc(nthreads * bm->rcvbuf_size);
+	bm->proc_cnt  = (int*)  malloc(sizeof(int) * nthreads * bm->comm_size);
 	assert(bm->recv_buff != NULL && bm->proc_cnt != NULL);
 	memset(bm->proc_cnt, 0, sizeof(int) * comm_size * nthreads);
 	
