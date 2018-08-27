@@ -65,3 +65,42 @@ void print_double_mat(double *mat, const int ldm, const int nrows, const int nco
 	}
 	printf("\n");
 }
+
+// Get the intersection of segment [s0, e0] and [s1, e1]
+void getSegmentIntersection(int s0, int e0, int s1, int e1, int *intersection, int *is, int *ie)
+{
+	if (s0 > s1)
+	{
+		int swap;
+		swap = s0; s0 = s1; s1 = swap;
+		swap = e0; e0 = e1; e1 = swap;
+	}
+	
+	if (s1 > e0)  // No intersection
+	{
+		*is = -1;
+		*ie = -1;
+		*intersection = 0;
+		return;
+	}
+	
+	*intersection = 1;
+	if (s1 <= e0)
+	{
+		*is = s1;
+		if (e0 < e1) *ie = e0; else *ie = e1;
+	}
+}
+
+// Get the intersection of rectangle [xs0:xe0, ys0:ye0] and [xs1:xe1, ys1:ye1]
+void getRectIntersection(
+	int xs0, int xe0, int ys0, int ye0,
+	int xs1, int xe1, int ys1, int ye1,
+	int *intersection,
+	int *ixs, int *ixe, int *iys, int *iye
+)
+{
+	getSegmentIntersection(xs0, xe0, xs1, xe1, intersection, ixs, ixe);
+	if (*intersection == 0) return;
+	getSegmentIntersection(ys0, ye0, ys1, ye1, intersection, iys, iye);
+}

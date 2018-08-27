@@ -91,13 +91,13 @@ void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 // [in]  row_num    : Number of rows the required block has
 // [in]  col_start  : 1st column of the required block
 // [in]  col_num    : Number of columns the required block has
-// [out] *rcv_buf   : Receive buffer
-// [in]  rcv_buf_ld : Leading dimension of the received buffer
+// [out] *src_buf   : Receive buffer
+// [in]  src_buf_ld : Leading dimension of the received buffer
 void Buzz_getBlockFromProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_proc, 
+	Buzz_Matrix_t Buzz_mat, int dst_rank, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *rcv_buf, int rcv_buf_ld
+	void *src_buf, int src_buf_ld
 );
 
 // Get a block from all related processes using MPI_Get
@@ -107,13 +107,13 @@ void Buzz_getBlockFromProcess(
 // [in]  row_num    : Number of rows the required block has
 // [in]  col_start  : 1st column of the required block
 // [in]  col_num    : Number of columns the required block has
-// [out] *rcv_buf   : Receive buffer
-// [in]  rcv_buf_ld : Leading dimension of the received buffer
+// [out] *src_buf   : Receive buffer
+// [in]  src_buf_ld : Leading dimension of the received buffer
 void Buzz_getBlock(
 	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *rcv_buf, int rcv_buf_ld
+	void *src_buf, int src_buf_ld
 );
 
 // Synchronize and complete all outstanding MPI_Get requests according to the 
@@ -128,7 +128,7 @@ void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt);
 // [in]  *row_num         : Array that stores Number of rows the required blocks has
 // [in]  *col_start       : Array that stores 1st column of the required blocks
 // [in]  *col_num         : Array that stores Number of columns the required blocks has
-// [out] **thread_rcv_buf : Pointer to this thread's receive buffer. Blocks are stored 
+// [out] **thread_src_buf : Pointer to this thread's receive buffer. Blocks are stored 
 //                          one by one without padding, col_num[i] is leading dimension
 // [out] @return          : Number of requested blocks, < nblocks means the receive buffer 
 //                          is not large enough
@@ -136,11 +136,42 @@ int Buzz_getBlockList(
 	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
 	int *row_start, int *row_num,
 	int *col_start, int *col_num,
-	void **thread_rcv_buf
+	void **thread_src_buf
 );
 
 // Complete all outstanding MPI_Get requests from the same thread 
 // tid : Thread ID
 void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid);
+
+// Put a block to a process using MPI_Put
+// Blocking, target process will be locked with MPI_Win_lock or mutex
+// [in] dst_proc   : Target process
+// [in] row_start  : 1st row of the required block
+// [in] row_num    : Number of rows the required block has
+// [in] col_start  : 1st column of the required block
+// [in] col_num    : Number of columns the required block has
+// [in] *src_buf   : Source buffer
+// [in] src_buf_ld : Leading dimension of the source buffer
+void Buzz_putBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Put a block to all related processes using MPI_Put
+// Blocking, target processes will be locked with MPI_Win_lock or mutex
+// [in] row_start  : 1st row of the required block
+// [in] row_num    : Number of rows the required block has
+// [in] col_start  : 1st column of the required block
+// [in] col_num    : Number of columns the required block has
+// [in] *src_buf   : Receive buffer
+// [in] src_buf_ld : Leading dimension of the received buffer
+void Buzz_putBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
 
 #endif
