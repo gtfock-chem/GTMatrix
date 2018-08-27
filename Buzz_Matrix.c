@@ -139,14 +139,20 @@ void Buzz_createBuzzMatrix(
 				// Single element, use the original data type
 				MPI_Type_dup(datatype, &bm->sb_stride[id]);
 				MPI_Type_dup(datatype, &bm->sb_nostride[id]);
-				MPI_Type_commit(&bm->sb_stride[id]);
-				MPI_Type_commit(&bm->sb_nostride[id]);
 			} else {
-				MPI_Type_vector(irow + 1, icol + 1, bm->ld_local, datatype, &bm->sb_stride[id]);
-				MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &bm->sb_nostride[id]);
-				MPI_Type_commit(&bm->sb_stride[id]);
-				MPI_Type_commit(&bm->sb_nostride[id]);
+				if (irow == 0)
+				{
+					// Only one row, use contiguous type
+					MPI_Type_contiguous(icol + 1, datatype, &bm->sb_stride[id]);
+					MPI_Type_contiguous(icol + 1, datatype, &bm->sb_nostride[id]);
+				} else {
+					// More than 1 row, use vector type
+					MPI_Type_vector(irow + 1, icol + 1, bm->ld_local, datatype, &bm->sb_stride[id]);
+					MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &bm->sb_nostride[id]);
+				}
 			}
+			MPI_Type_commit(&bm->sb_stride[id]);
+			MPI_Type_commit(&bm->sb_nostride[id]);
 		}
 	}
 	
@@ -239,8 +245,9 @@ void Buzz_getBlockFromProcess(
 	int recv_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
-	if (shm_target != -1) 
+	if (shm_target != -1)
 	{
+		// Target process and current process is in same node, use memcpy
 		char *dst_ptr   = shm_ptr + dst_pos * bm->unit_size;
 		int recv_ptr_ld = rcv_buf_ld * bm->unit_size;
 		int dst_ptr_ld  = dst_blk_ld * bm->unit_size;
@@ -251,9 +258,12 @@ void Buzz_getBlockFromProcess(
 			dst_ptr  += dst_ptr_ld;
 		}
 	} else {
+		// Target process and current process isn't in same node, use MPI_Get
 		int recv_ptr_ld = rcv_buf_ld * bm->unit_size;
-		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)
+		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
 		{
+			// Block is small, use predefined data type or define a new 
+			// data type to reduce MPI_Get overhead
 			int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
 			MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
 			if (col_num == rcv_buf_ld)
@@ -272,13 +282,28 @@ void Buzz_getBlockFromProcess(
 					MPI_Type_free(&rcv_dt);
 				}
 			}
-		} else {
-			for (int irow = 0; irow < row_num; irow++)
+		} else {   
+			// Doesn't has predefined MPI data type
+			if (row_num > MPI_DT_SB_DIM_MAX)
 			{
-				MPI_Get(recv_ptr, recv_bytes, MPI_BYTE, dst_proc, 
-						dst_pos,  recv_bytes, MPI_BYTE, bm->mpi_win);
-				recv_ptr += recv_ptr_ld;
-				dst_pos  += dst_blk_ld;
+				// Many rows, define a MPI data type to reduce number of request
+				MPI_Datatype dst_dt, rcv_dt;
+				MPI_Type_vector(row_num, col_num, dst_blk_ld, bm->datatype, &dst_dt);
+				MPI_Type_vector(row_num, col_num, rcv_buf_ld, bm->datatype, &rcv_dt);
+				MPI_Type_commit(&dst_dt);
+				MPI_Type_commit(&rcv_dt);
+				MPI_Get(recv_ptr, 1, rcv_dt, dst_proc, dst_pos, 1, dst_dt, bm->mpi_win);
+				MPI_Type_free(&dst_dt);
+				MPI_Type_free(&rcv_dt);
+			} else {
+				// A few long rows, use direct get
+				for (int irow = 0; irow < row_num; irow++)
+				{
+					MPI_Get(recv_ptr, recv_bytes, MPI_BYTE, dst_proc, 
+							dst_pos,  recv_bytes, MPI_BYTE, bm->mpi_win);
+					recv_ptr += recv_ptr_ld;
+					dst_pos  += dst_blk_ld;
+				}
 			}
 		}
 	}
