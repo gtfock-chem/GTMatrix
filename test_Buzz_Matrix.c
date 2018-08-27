@@ -49,9 +49,11 @@ int main(int argc, char **argv)
 	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
 	
 	// Update matrix data
+	int _50 = 50;
+	Buzz_fillBuzzMatrix(bm, &_50);
 	for (int irow = 0; irow < bm->my_nrows; irow++)
 		for (int icol = 0; icol < bm->my_ncols; icol++)
-			mat_block[irow * bm->ld_local + icol] += 100;
+			mat_block[irow * bm->ld_local + icol] += 100 * my_rank + irow * bm->my_ncols + icol;
 	// Start to fetch blocks from other processes again
 	memset(&mat[0], 0, 4 * 96);
 	int rs_[4] = {1, 2, 3, 10};

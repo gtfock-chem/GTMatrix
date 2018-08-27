@@ -70,6 +70,11 @@ void Buzz_createBuzzMatrix(
 // Free a Buzz_Matrix structure
 void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat);
 
+// Fill the Buzz_Matrix with a single value
+// [in] *value : Pointer to the value of appropriate type that matches
+//               Buzz_Matrix's unit_size (4 or 8 bytes)
+void Buzz_fillBuzzMatrix(Buzz_Matrix_t Buzz_mat, void *value);
+
 // Start a read-only epoch to a Buzz_Matrix, user should guarantee no 
 // modification to matrix data in the this epoch 
 // A MPI_Barrier is called at the beginning of this function 

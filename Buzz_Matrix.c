@@ -190,6 +190,31 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm);
 }
 
+void Buzz_fillBuzzMatrix(Buzz_Matrix_t Buzz_mat, void *value)
+{
+	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->unit_size == 4)
+	{
+		int _value, *ptr;
+		memcpy(&_value, value, 4);
+		ptr = (int*) bm->mat_block;
+		for (int i = 0; i < bm->my_nrows; i++)
+			#pragma vector
+			for (int j = 0; j < bm->my_ncols; j++) 
+				ptr[i * bm->ld_local + j] = _value;
+	}
+	if (bm->unit_size == 8)
+	{
+		double _value, *ptr;
+		memcpy(&_value, value, 8);
+		ptr = (double*) bm->mat_block;
+		for (int i = 0; i < bm->my_nrows; i++)
+			#pragma vector
+			for (int j = 0; j < bm->my_ncols; j++) 
+				ptr[i * bm->ld_local + j] = _value;
+	}
+}
+
 void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
 	MPI_Barrier(Buzz_mat->mpi_comm);
