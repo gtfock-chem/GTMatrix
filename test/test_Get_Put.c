@@ -9,13 +9,16 @@
 
 #define ACTOR_RANK 8
 
+// mpirun -np 12 ./test_Get_Put.x
+
 int main(int argc, char **argv)
 {
-	MPI_Init(&argc, &argv);
+	int provided;
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	
 	int r_displs[5] = {0, 3, 6, 8, 12};
 	int c_displs[5] = {0, 4, 6, 8};
-	int mat[96], req_cnt[100];
+	int mat[96];
 	
 	int my_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -39,12 +42,11 @@ int main(int argc, char **argv)
 	
 	// Start to fetch blocks from other processes
 	memset(&mat[0], 0, 4 * 96);
-	memset(&req_cnt[0], 0, 4 * 100);
 	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	if (my_rank == ACTOR_RANK)
 	{
-		Buzz_getBlock(bm, &req_cnt[0], 0, 12, 0, 8, &mat[0], 8);
-		Buzz_flushProcListGetRequests(bm, &req_cnt[0]);
+		Buzz_getBlock(bm, bm->proc_cnt, 0, 12, 0, 8, &mat[0], 8);
+		Buzz_flushProcListGetRequests(bm, bm->proc_cnt);
 		
 		print_int_mat(&mat[0], 8, 12, 8, "Full matrix");
 	}
