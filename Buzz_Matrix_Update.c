@@ -7,8 +7,8 @@
 #include "Buzz_Matrix.h"
 #include "utils.h"
 
-void Buzz_putBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank, 
+void Buzz_updateBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
 	int row_start, int row_num,
 	int col_start, int col_num,
 	void *src_buf, int src_buf_ld
@@ -43,7 +43,7 @@ void Buzz_putBlockToProcess(
 			break;
 		}
 		
-	// Use memcpy instead of MPI_Put for shared memory window
+	// Update dst block
 	char *src_ptr = (char*) src_buf;
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
@@ -55,34 +55,66 @@ void Buzz_putBlockToProcess(
 		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
 		int dst_ptr_ld = dst_blk_ld * bm->unit_size;
-		for (int irow = 0; irow < row_num; irow++)
+		if (MPI_REPLACE == op)  // Replace, == MPI_Put, use memcpy 
 		{
-			memcpy(dst_ptr, src_ptr, row_bytes);
-			src_ptr += src_ptr_ld;
-			dst_ptr += dst_ptr_ld;
+			for (int irow = 0; irow < row_num; irow++)
+			{
+				memcpy(dst_ptr, src_ptr, row_bytes);
+				src_ptr += src_ptr_ld;
+				dst_ptr += dst_ptr_ld;
+			}
+		}
+		if (MPI_SUM == op)      // Sum, need to judge the data type of matrix elements
+		{
+			if (MPI_INT == bm->datatype)
+			{
+				int *src_ptr_ = (int*) src_ptr;
+				int *dst_ptr_ = (int*) dst_ptr;
+				for (int irow = 0; irow < row_num; irow++)
+				{
+					#pragma vector
+					for (int icol = 0; icol < col_num; icol++)
+						dst_ptr_[icol] += src_ptr_[icol];
+					src_ptr_ += src_buf_ld;
+					dst_ptr_ += dst_blk_ld;
+				}
+			}
+			if (MPI_DOUBLE == bm->datatype)
+			{
+				double *src_ptr_ = (double*) src_ptr;
+				double *dst_ptr_ = (double*) dst_ptr;
+				for (int irow = 0; irow < row_num; irow++)
+				{
+					#pragma vector
+					for (int icol = 0; icol < col_num; icol++)
+						dst_ptr_[icol] += src_ptr_[icol];
+					src_ptr_ += src_buf_ld;
+					dst_ptr_ += dst_blk_ld;
+				}
+			}
 		}
 	} else {
-		// Target process and current process isn't in same node, use MPI_Put
+		// Target process and current process isn't in same node, use MPI_Accumulate
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
 		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
 		{
 			// Block is small, use predefined data type or define a new 
-			// data type to reduce MPI_Put overhead
+			// data type to reduce MPI_Accumulate overhead
 			int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
 			MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
 			if (col_num == src_buf_ld)
 			{
 				MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
-				MPI_Put(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
+				MPI_Accumulate(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
 			} else {
 				if (col_num == bm->ld_local)
 				{
-					MPI_Put(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
+					MPI_Accumulate(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
 				} else {
 					MPI_Datatype rcv_dt;
 					MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
 					MPI_Type_commit(&rcv_dt);
-					MPI_Put(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
+					MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
 					MPI_Type_free(&rcv_dt);
 				}
 			}
@@ -96,15 +128,17 @@ void Buzz_putBlockToProcess(
 				MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
 				MPI_Type_commit(&dst_dt);
 				MPI_Type_commit(&rcv_dt);
-				MPI_Put(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, bm->mpi_win);
+				MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, op, bm->mpi_win);
 				MPI_Type_free(&dst_dt);
 				MPI_Type_free(&rcv_dt);
 			} else {
 				// A few long rows, use direct put
 				for (int irow = 0; irow < row_num; irow++)
 				{
-					MPI_Put(src_ptr, row_bytes, MPI_BYTE, dst_rank, 
-							dst_pos, row_bytes, MPI_BYTE, bm->mpi_win);
+					MPI_Accumulate(
+						src_ptr, col_num, bm->datatype, dst_rank, 
+						dst_pos, col_num, bm->datatype, op, bm->mpi_win
+					);
 					src_ptr += src_ptr_ld;
 					dst_pos += dst_blk_ld;
 				}
@@ -114,8 +148,8 @@ void Buzz_putBlockToProcess(
 	MPI_Win_unlock(dst_rank, bm->mpi_win);
 }
 
-void Buzz_putBlock(
-	Buzz_Matrix_t Buzz_mat,
+void Buzz_updateBlock(
+	Buzz_Matrix_t Buzz_mat, MPI_Op op, 
 	int row_start, int row_num,
 	int col_start, int col_num,
 	void *src_buf, int src_buf_ld
@@ -171,10 +205,71 @@ void Buzz_putBlock(
 			int col_dist  = blk_c_s - col_start;
 			char *blk_ptr = (char*) src_buf;
 			blk_ptr += (row_dist * src_buf_ld + col_dist) * bm->unit_size;
-			Buzz_putBlockToProcess(
-				bm, dst_rank, blk_r_s, blk_r_num, 
+			Buzz_updateBlockToProcess(
+				bm, dst_rank, op, blk_r_s, blk_r_num, 
 				blk_c_s, blk_c_num, blk_ptr, src_buf_ld
 			);
 		}
 	}
 }
+
+void Buzz_putBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_REPLACE, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld
+	);
+}
+
+void Buzz_accumulateBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_SUM, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld
+	);
+}
+
+void Buzz_putBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlockToProcess(
+		Buzz_mat, dst_rank, MPI_REPLACE,
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld
+	);
+}
+
+void Buzz_accumulateBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlockToProcess(
+		Buzz_mat, dst_rank, MPI_SUM,
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld
+	);
+}
+

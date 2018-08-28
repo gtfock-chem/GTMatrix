@@ -84,22 +84,6 @@ void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 // A MPI_Barrier is called at the end of this function 
 void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 
-// Get a block from a process using MPI_Get
-// Non-blocking, data may not be ready before synchronization
-// [in]  dst_proc   : Target process
-// [in]  row_start  : 1st row of the required block
-// [in]  row_num    : Number of rows the required block has
-// [in]  col_start  : 1st column of the required block
-// [in]  col_num    : Number of columns the required block has
-// [out] *src_buf   : Receive buffer
-// [in]  src_buf_ld : Leading dimension of the received buffer
-void Buzz_getBlockFromProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank, 
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-);
-
 // Get a block from all related processes using MPI_Get
 // Non-blocking, data may not be ready before synchronization
 // [out] *proc_cnt  : Array for counting how many MPI_Get requests a process has
@@ -143,32 +127,92 @@ int Buzz_getBlockList(
 // tid : Thread ID
 void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid);
 
-// Put a block to a process using MPI_Put
-// Blocking, target process will be locked with MPI_Win_lock or mutex
-// [in] dst_proc   : Target process
-// [in] row_start  : 1st row of the required block
-// [in] row_num    : Number of rows the required block has
-// [in] col_start  : 1st column of the required block
-// [in] col_num    : Number of columns the required block has
-// [in] *src_buf   : Source buffer
-// [in] src_buf_ld : Leading dimension of the source buffer
-void Buzz_putBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank, 
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-);
-
-// Put a block to all related processes using MPI_Put
-// Blocking, target processes will be locked with MPI_Win_lock or mutex
+// Update (put or accumulate) a block to all related processes using MPI_Accumulate
+// Blocking, target processes will be locked with MPI_Win_lock
+// [in] op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
 // [in] row_start  : 1st row of the required block
 // [in] row_num    : Number of rows the required block has
 // [in] col_start  : 1st column of the required block
 // [in] col_num    : Number of columns the required block has
 // [in] *src_buf   : Receive buffer
 // [in] src_buf_ld : Leading dimension of the received buffer
+void Buzz_updateBlock(
+	Buzz_Matrix_t Buzz_mat, MPI_Op op, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Put a block to all related processes using Buzz_updateBlock()
 void Buzz_putBlock(
 	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Accumulate a block to all related processes using Buzz_updateBlock()
+void Buzz_accumulateBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+
+// *=================== Internal Functions ===================*
+// *  Functions below are used by functions above, they are   *
+// *  listed here just as references. USE AT YOUR OWN RISK!   *
+// *==========================================================*
+
+// Get a block from a process using MPI_Get
+// Non-blocking, data may not be ready before synchronization
+// This function should not be directly called, use Buzz_getBlock() instead
+// [in]  dst_proc   : Target process
+// [in]  row_start  : 1st row of the required block
+// [in]  row_num    : Number of rows the required block has
+// [in]  col_start  : 1st column of the required block
+// [in]  col_num    : Number of columns the required block has
+// [out] *src_buf   : Receive buffer
+// [in]  src_buf_ld : Leading dimension of the received buffer
+void Buzz_getBlockFromProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Update (put or accumulate) a block to a process using MPI_Accumulate
+// Blocking, target process will be locked with MPI_Win_lock
+// This function should not be directly called, use Buzz_updateBlock() instead
+// [in] dst_rank   : Target process
+// [in] op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
+// [in] row_start  : 1st row of the required block
+// [in] row_num    : Number of rows the required block has
+// [in] col_start  : 1st column of the required block
+// [in] col_num    : Number of columns the required block has
+// [in] *src_buf   : Source buffer
+// [in] src_buf_ld : Leading dimension of the source buffer
+void Buzz_updateBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Put a block to a processe using Buzz_updateBlockToProcess()
+// This function should not be directly called, use Buzz_putBlock() instead
+void Buzz_putBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
+
+// Accumulate a block to a processe using Buzz_updateBlockToProcess()
+// This function should not be directly called, use Buzz_accumulateBlock() instead
+void Buzz_accumulateBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
 	int row_start, int row_num,
 	int col_start, int col_num,
 	void *src_buf, int src_buf_ld

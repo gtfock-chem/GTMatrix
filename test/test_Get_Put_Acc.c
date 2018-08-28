@@ -53,8 +53,8 @@ int main(int argc, char **argv)
 	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
 	
 	// Update matrix data
-	int _50 = 50;
-	Buzz_fillBuzzMatrix(bm, &_50);
+	int ifill = 0;
+	Buzz_fillBuzzMatrix(bm, &ifill);
 	for (int irow = 0; irow < bm->my_nrows; irow++)
 		for (int icol = 0; icol < bm->my_ncols; icol++)
 			mat_block[irow * bm->ld_local + icol] += 100 * my_rank + irow * bm->my_ncols + icol;
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
 	if (my_rank == 9)
 		Buzz_putBlock(bm, 6, 2, 6, 1, bm->mat_block, bm->ld_local);
 	if (my_rank == 10)
-		Buzz_putBlock(bm, 6, 2, 7, 1, bm->mat_block, bm->ld_local);
+		Buzz_accumulateBlock(bm, 6, 2, 7, 1, bm->mat_block, bm->ld_local);
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	if (my_rank == ACTOR_RANK)
