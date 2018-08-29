@@ -25,7 +25,7 @@ struct Buzz_Matrix
 	int unit_size;               // Size of matrix data type, unit is byte
 	int my_rank, comm_size;      // Rank of this process and number of process in the global communicator
 	void *mat_block;             // Local matrix block
-	void *recv_buff;             // Receive buffer
+	void *recv_buff;             // Receive buffer for Buzz_getBlockList()
 	int rcvbuf_size;             // Size of recv_buff, unit is byte
 	int *proc_cnt;               // Array for counting how many MPI_Get requests 
 	int nthreads;                // Maximum number of thread that calls getBlock
@@ -69,11 +69,6 @@ void Buzz_createBuzzMatrix(
 
 // Free a Buzz_Matrix structure
 void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat);
-
-// Fill the Buzz_Matrix with a single value
-// [in] *value : Pointer to the value of appropriate type that matches
-//               Buzz_Matrix's unit_size (4 or 8 bytes)
-void Buzz_fillBuzzMatrix(Buzz_Matrix_t Buzz_mat, void *value);
 
 // Start a read-only epoch to a Buzz_Matrix, user should guarantee no 
 // modification to matrix data in the this epoch 
@@ -159,6 +154,13 @@ void Buzz_accumulateBlock(
 	void *src_buf, int src_buf_ld
 );
 
+// Fill the Buzz_Matrix with a single value
+// [in] *value : Pointer to the value of appropriate type that matches
+//               Buzz_Matrix's unit_size, now support int and double
+void Buzz_fillBuzzMatrix(Buzz_Matrix_t Buzz_mat, void *value);
+
+// Symmetrize a matrix, i.e. (A + A^T) / 2, now support int and double data type
+void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat);
 
 // *=================== Internal Functions ===================*
 // *  Functions below are used by functions above, they are   *
@@ -200,7 +202,7 @@ void Buzz_updateBlockToProcess(
 	void *src_buf, int src_buf_ld
 );
 
-// Put a block to a processe using Buzz_updateBlockToProcess()
+// Put a block to a process using Buzz_updateBlockToProcess()
 // This function should not be directly called, use Buzz_putBlock() instead
 void Buzz_putBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank,
@@ -209,7 +211,7 @@ void Buzz_putBlockToProcess(
 	void *src_buf, int src_buf_ld
 );
 
-// Accumulate a block to a processe using Buzz_updateBlockToProcess()
+// Accumulate a block to a process using Buzz_updateBlockToProcess()
 // This function should not be directly called, use Buzz_accumulateBlock() instead
 void Buzz_accumulateBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank,

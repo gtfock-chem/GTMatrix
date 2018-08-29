@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 	
 	Buzz_Matrix_t bm;
 	
-	// 4 * 3 proc grid, matrix size 10 * 10
+	// 4 * 3 proc grid, matrix size 12 * 8
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_INT, 4, my_rank, 12, 8, 
 		4, 3, &r_displs[0], &c_displs[0], 2, 0
