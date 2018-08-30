@@ -116,9 +116,9 @@ void Buzz_createBuzzMatrix(
 	MPI_Info_create(&mpi_info);
 	int my_block_size = bm->my_nrows * shm_max_ncol;
 	MPI_Win_create(bm->mat_block, my_block_size * unit_size, unit_size, mpi_info, bm->mpi_comm, &bm->mpi_win);
-	bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
-	assert(bm->ld_blks != NULL);
-	MPI_Allgather(&bm->ld_local, 1, MPI_INT, bm->ld_blks, 1, MPI_INT, bm->mpi_comm);
+	//bm->ld_blks = (int*) malloc(sizeof(int) * bm->comm_size);
+	//assert(bm->ld_blks != NULL);
+	//MPI_Allgather(&bm->ld_local, 1, MPI_INT, bm->ld_blks, 1, MPI_INT, bm->mpi_comm);
 	MPI_Info_free(&mpi_info);
 	
 	// Allocate space for receive buffer
@@ -177,7 +177,7 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->r_blklens);
 	free(bm->c_displs);
 	free(bm->c_blklens);
-	free(bm->ld_blks);
+	//free(bm->ld_blks);
 	free(bm->recv_buff);
 	free(bm->proc_cnt);
 	free(bm->shm_global_ranks);

@@ -19,7 +19,7 @@ void Buzz_updateBlockToProcess(
 	int col_end       = col_start + col_num;
 	int dst_rowblk    = dst_rank / bm->c_blocks;
 	int dst_colblk    = dst_rank % bm->c_blocks;
-	int dst_blk_ld    = bm->ld_blks[dst_rank];
+	int dst_blk_ld    = bm->ld_local; // bm->ld_blks[dst_rank];
 	int dst_row_start = bm->r_displs[dst_rowblk];
 	int dst_col_start = bm->c_displs[dst_colblk];
 	int dst_row_end   = bm->r_displs[dst_rowblk + 1];

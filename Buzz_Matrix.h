@@ -18,7 +18,7 @@ struct Buzz_Matrix
 	int my_nrows,  my_ncols;     // How many row & column local block has
 	int *r_displs, *r_blklens;   // Displacements and length of each block on row direction
 	int *c_displs, *c_blklens;   // Displacements and length of each block on column direction
-	int *ld_blks;                // Leading dimensions of each matrix block
+	//int *ld_blks;                // Leading dimensions of each matrix block
 	int ld_local;                // Local matrix block's leading dimension
 	
 	// MPI Global window
