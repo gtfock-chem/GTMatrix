@@ -51,6 +51,7 @@ void Buzz_updateBlockToProcess(
 	MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
 	if (shm_target != -1)
 	{
+		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_target, 0, bm->shm_win);
 		// Target process and current process is in same node, use memcpy
 		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
@@ -93,6 +94,7 @@ void Buzz_updateBlockToProcess(
 				}
 			}
 		}
+		MPI_Win_unlock(shm_target, bm->shm_win);
 	} else {
 		// Target process and current process isn't in same node, use MPI_Accumulate
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
