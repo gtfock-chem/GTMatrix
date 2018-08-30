@@ -29,6 +29,7 @@ struct Buzz_Matrix
 	int rcvbuf_size;             // Size of recv_buff, unit is byte
 	int *proc_cnt;               // Array for counting how many MPI_Get requests 
 	int nthreads;                // Maximum number of thread that calls getBlock
+	void *symm_buf;              // Buffer for symmetrization
 	
 	// MPI Shared memory window
 	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator

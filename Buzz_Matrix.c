@@ -79,6 +79,9 @@ void Buzz_createBuzzMatrix(
 	// Use the same local leading dimension for all processes
 	MPI_Allreduce(&bm->my_ncols, &bm->ld_local, 1, MPI_INT, MPI_MAX, bm->mpi_comm);
 	
+	bm->symm_buf = malloc(unit_size * bm->my_nrows * bm->my_ncols);
+	assert(bm->symm_buf != NULL);
+	
 	// Allocate shared memory and its MPI window
 	// (1) Split communicator to get shared memory communicator
 	MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &bm->shm_comm);
@@ -179,6 +182,7 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->proc_cnt);
 	free(bm->shm_global_ranks);
 	free(bm->shm_mat_blocks);
+	free(bm->symm_buf);
 	
 	for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
 	{
@@ -224,8 +228,8 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	if (bm->nrows != bm->ncols) return;
 	
 	// This process holds [rs:re, cs:ce], need to fetch [cs:ce, rs:re]
-	void *rcv_buf = malloc(bm->unit_size * bm->my_nrows * bm->my_ncols);
-	assert(rcv_buf != NULL);
+	void *rcv_buf = bm->symm_buf;
+
 	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	int my_row_start = bm->r_displs[bm->my_rowblk];
 	int my_col_start = bm->c_displs[bm->my_colblk];
@@ -269,6 +273,4 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 		}
 	}
 	MPI_Barrier(bm->mpi_comm);
-	
-	free(rcv_buf);
 }
