@@ -5,6 +5,7 @@
 #include <mpi.h>
 
 #include "Buzz_Matrix.h"
+#include "Buzz_Req_Vector.h"
 #include "utils.h"
 
 void Buzz_createBuzzMatrix(
@@ -160,6 +161,11 @@ void Buzz_createBuzzMatrix(
 		}
 	}
 	
+	// Allocate update request vector
+	bm->req_vec = (Buzz_Req_Vector_t*) malloc(bm->comm_size * sizeof(Buzz_Req_Vector_t));
+	for (int i = 0; i < bm->comm_size; i++)
+		Buzz_createReqVector(&bm->req_vec[i]);
+
 	*Buzz_mat = bm;
 }
 
@@ -192,6 +198,9 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->sb_stride);
 	free(bm->sb_nostride);
 	
+	for (int i = 0; i < bm->comm_size; i++)
+		Buzz_destroyReqVector(bm->req_vec[i]);
+
 	free(bm);
 }
 
