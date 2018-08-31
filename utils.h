@@ -38,4 +38,7 @@ void getRectIntersection(
 	int *ixs, int *ixe, int *iys, int *iye
 );
 
+// Get the (first) index of an integer element in an array, returning -1 means no such element
+int getElementIndexInArray(const int elem, const int *array, const int array_size);
+
 #endif

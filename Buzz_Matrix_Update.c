@@ -7,19 +7,6 @@
 #include "Buzz_Matrix.h"
 #include "utils.h"
 
-static int Buzz_getShmRankOfGlobalRank(Buzz_Matrix_t Buzz_mat, int dst_rank)
-{
-	Buzz_Matrix_t bm  = Buzz_mat;
-	int ret = -1;
-	for (int i = 0; i < bm->shm_size; i++)
-		if (bm->shm_global_ranks[i] == dst_rank)
-		{
-			ret = i;
-			break;
-		}
-	return ret;
-}
-
 void Buzz_updateBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
 	int row_start, int row_num,
@@ -47,7 +34,7 @@ void Buzz_updateBlockToProcess(
 		(row_num   * col_num == 0)) return;
 	
 	// Check if the target process is in the shared memory communicator
-	int shm_rank  = Buzz_getShmRankOfGlobalRank(bm, dst_rank);
+	int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
 	void *shm_ptr = (shm_rank == -1) ? NULL : bm->shm_mat_blocks[shm_rank];
 	
 	// Update dst block
@@ -256,7 +243,7 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 	for (int _dst_rank = bm->my_rank; _dst_rank < bm->comm_size + bm->my_rank; _dst_rank++)
 	{
 		int dst_rank = _dst_rank % bm->comm_size;
-		int shm_rank = Buzz_getShmRankOfGlobalRank(bm, dst_rank);
+		int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
 
 		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
 		if (shm_rank != -1) MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_rank, 0, bm->shm_win);
