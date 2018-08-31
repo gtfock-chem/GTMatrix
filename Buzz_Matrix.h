@@ -73,7 +73,7 @@ void Buzz_createBuzzMatrix(
 );
 
 // Free a Buzz_Matrix structure
-// This call is collective and thread-safe
+// This call is collective, thread-safe
 void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat);
 
 // Start a read-only epoch to a Buzz_Matrix, user should guarantee no 

@@ -108,7 +108,7 @@ void Buzz_createBuzzMatrix(
 	MPI_Aint _size;
 	int _disp;
 	bm->shm_mat_blocks = (void**) malloc(sizeof(void*) * bm->shm_size);
-	assert(bm->shm_global_ranks != NULL);
+	assert(bm->shm_mat_blocks != NULL);
 	for (int i = 0; i < bm->shm_size; i++)
 		MPI_Win_shared_query(bm->shm_win, i, &_size, &_disp, &bm->shm_mat_blocks[i]);
 
