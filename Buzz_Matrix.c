@@ -36,6 +36,9 @@ void Buzz_createBuzzMatrix(
 	bm->my_rowblk = my_rank / c_blocks;
 	bm->my_colblk = my_rank % c_blocks;
 	
+	bm->is_batch_updating = 0;
+	bm->is_batch_getting  = 0;
+	
 	// Allocate space for displacement arrays
 	int r_displs_mem_size = sizeof(int) * (r_blocks + 1);
 	int c_displs_mem_size = sizeof(int) * (c_blocks + 1);
@@ -242,13 +245,15 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	int my_row_start = bm->r_displs[bm->my_rowblk];
 	int my_col_start = bm->c_displs[bm->my_colblk];
-	Buzz_getBlock(
-		bm, bm->proc_cnt, 
+	Buzz_startBatchGet(bm);
+    Buzz_addGetBlockRequest(
+		bm, 
 		my_col_start, bm->my_ncols, 
 		my_row_start, bm->my_nrows, 
 		rcv_buf, bm->my_nrows
 	);
-	Buzz_flushProcListGetRequests(bm, bm->proc_cnt);
+	Buzz_execBatchGet(bm);
+	Buzz_stopBatchGet(bm);
 	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
 	
 	if (MPI_INT == bm->datatype)

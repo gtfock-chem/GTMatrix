@@ -128,7 +128,7 @@ void Buzz_getBlock(
 	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld, int send_req
 )
 {
 	Buzz_Matrix_t bm = Buzz_mat;
@@ -181,13 +181,38 @@ void Buzz_getBlock(
 			int col_dist  = blk_c_s - col_start;
 			char *blk_ptr = (char*) src_buf;
 			blk_ptr += (row_dist * src_buf_ld + col_dist) * bm->unit_size;
-			int nGet = Buzz_getBlockFromProcess(
-				bm, dst_rank, blk_r_s, blk_r_num, 
-				blk_c_s, blk_c_num, blk_ptr, src_buf_ld
-			);
-			proc_cnt[dst_rank] += nGet;
+			Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
+			
+			if (send_req)
+			{
+				int nGet = Buzz_getBlockFromProcess(
+					bm, dst_rank, blk_r_s, blk_r_num, 
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+				);
+				proc_cnt[dst_rank] += nGet;
+			} else {
+				Buzz_pushToReqVector(
+					req_vec, MPI_REPLACE, blk_r_s, blk_r_num, 
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+				);
+			}
 		}
 	}
+}
+
+void Buzz_addGetBlockRequest(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_getBlock(
+		Buzz_mat, Buzz_mat->proc_cnt,
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, 0
+	);
 }
 
 void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt)
@@ -204,7 +229,7 @@ void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt)
 	}
 }
 
-int Buzz_getBlockList(
+int Buzz_getBlockList_mt(
 	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
 	int *row_start, int *row_num,
 	int *col_start, int *col_num,
@@ -233,8 +258,8 @@ int Buzz_getBlockList(
 		}
 		
 		Buzz_getBlock(
-			bm, proc_cnt, row_start[i], row_num[i],
-			col_start[i], col_num[i], (void*) thread_rcv_ptr, col_num[i]
+			bm, proc_cnt, row_start[i], row_num[i],	col_start[i], col_num[i], 
+			(void*) thread_rcv_ptr, col_num[i], 1
 		);
 		thread_rcv_ptr += block_bytes;
 	}
@@ -243,9 +268,57 @@ int Buzz_getBlockList(
 	return ret;
 }
 
-void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid)
+void Buzz_completeGetBlocks_mt(Buzz_Matrix_t Buzz_mat, int tid)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	int *proc_cnt = bm->proc_cnt + bm->comm_size * tid;
 	Buzz_flushProcListGetRequests(bm, proc_cnt);
+}
+
+void Buzz_startBatchGet(Buzz_Matrix_t Buzz_mat)
+{
+	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->is_batch_updating) return;
+	bm->is_batch_getting = 1;
+	for (int i = 0; i < bm->comm_size; i++)
+		Buzz_resetReqVector(bm->req_vec[i]);
+}
+
+void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
+{
+	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->is_batch_getting == 0) return;
+	
+	for (int _dst_rank = bm->my_rank; _dst_rank < bm->comm_size + bm->my_rank; _dst_rank++)
+	{	
+		int dst_rank = _dst_rank % bm->comm_size;
+		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
+		if (req_vec->curr_size == 0) continue;
+		
+		int shm_rank = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
+
+		for (int i = 0; i < req_vec->curr_size; i++)
+		{
+			int blk_r_s    = req_vec->row_starts[i];
+			int blk_r_num  = req_vec->row_nums[i];
+			int blk_c_s    = req_vec->col_starts[i];
+			int blk_c_num  = req_vec->col_nums[i];
+			void *blk_ptr  = req_vec->src_bufs[i];
+			int src_buf_ld = req_vec->src_buf_lds[i];
+			int nGet = Buzz_getBlockFromProcess(
+				bm, dst_rank, blk_r_s, blk_r_num, 
+				blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+			);
+			bm->proc_cnt[dst_rank] += nGet;
+		}
+		
+		Buzz_resetReqVector(req_vec);
+	}
+	Buzz_flushProcListGetRequests(bm, bm->proc_cnt);
+}
+
+void Buzz_stopBatchGet(Buzz_Matrix_t Buzz_mat)
+{
+	Buzz_Matrix_t bm = Buzz_mat;
+	bm->is_batch_getting = 0;
 }

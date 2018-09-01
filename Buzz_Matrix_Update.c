@@ -230,6 +230,7 @@ void Buzz_updateBlock(
 void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->is_batch_getting) return;
 	bm->is_batch_updating = 1;
 	for (int i = 0; i < bm->comm_size; i++)
 		Buzz_resetReqVector(bm->req_vec[i]);
@@ -238,7 +239,8 @@ void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
-
+	if (bm->is_batch_updating == 0) return;
+	
 	for (int _dst_rank = bm->my_rank; _dst_rank < bm->comm_size + bm->my_rank; _dst_rank++)
 	{	
 		int dst_rank = _dst_rank % bm->comm_size;

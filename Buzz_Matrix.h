@@ -33,6 +33,7 @@ struct Buzz_Matrix
 	void *symm_buf;              // Buffer for symmetrization
 	Buzz_Req_Vector_t *req_vec;  // Update requests for each process
 	int is_batch_updating;       // If we can submit update request
+	int is_batch_getting;        // If we can submit get request
 	
 	// MPI Shared memory window
 	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator
@@ -97,11 +98,15 @@ void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat);
 // [in]  col_num    : Number of columns the required block has
 // [out] *src_buf   : Receive buffer
 // [in]  src_buf_ld : Leading dimension of the received buffer
+// [in]  send_req   : If this value is 1, then this function is thread-safe, it 
+//                    will call Buzz_getBlockFromProcess(); if the value is 0,
+//                    this function is not thread-safe, it will add a get request
+//                    which will be handled later using Buzz_execBatchGet()
 void Buzz_getBlock(
 	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld, int send_req
 );
 
 // Synchronize and complete all outstanding MPI_Get requests according to the 
@@ -111,6 +116,7 @@ void Buzz_getBlock(
 void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt);
 
 // Get a list of blocks from all related processes using MPI_Get
+// This function is designed to be called in multi-thread parallel region
 // This call is not collective, thread-safe
 // [in]  nblocks          : Number of blocks to get
 // [in]  tid              : Thread ID
@@ -122,7 +128,7 @@ void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt);
 //                          one by one without padding, col_num[i] is leading dimension
 // [out] @return          : Number of requested blocks, < nblocks means the receive buffer 
 //                          is not large enough
-int Buzz_getBlockList(
+int Buzz_getBlockList_mt(
 	Buzz_Matrix_t Buzz_mat, int nblocks, int tid, 
 	int *row_start, int *row_num,
 	int *col_start, int *col_num,
@@ -130,9 +136,32 @@ int Buzz_getBlockList(
 );
 
 // Complete all outstanding MPI_Get requests from the same thread 
+// This function is designed to be called in multi-thread parallel region
 // This call is not collective, thread-safe
 // tid : Thread ID
-void Buzz_completeGetBlocks(Buzz_Matrix_t Buzz_mat, int tid);
+void Buzz_completeGetBlocks_mt(Buzz_Matrix_t Buzz_mat, int tid);
+
+// Start a batch get epoch and allow to submit update requests
+// This call is not collective, not thread-safe
+void Buzz_startBatchGet(Buzz_Matrix_t Buzz_mat);
+
+// Execute all get requests in the queues
+// This call is not collective, not thread-safe
+void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat);
+
+// Stop a batch get epoch and disallow to submit update requests
+// This call is not collective, not thread-safe
+void Buzz_stopBatchGet(Buzz_Matrix_t Buzz_mat);
+
+// Add a get to put a block to all related processes using 
+// Buzz_getBlock(), non-blocking operation
+// This call is not collective, not thread-safe
+void Buzz_addGetBlockRequest(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+);
 
 // Update (put or accumulate) a block to all related processes using MPI_Accumulate
 // This call is not collective, not thread-safe
