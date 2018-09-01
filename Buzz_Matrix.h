@@ -106,7 +106,7 @@ void Buzz_getBlock(
 
 // Synchronize and complete all outstanding MPI_Get requests according to the 
 // counter array and reset the counter array
-// This call is not collective but thread-safe
+// This call is not collective, thread-safe
 // [inout] *proc_cnt  : Array for counting how many MPI_Get requests a process has
 void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt);
 
@@ -173,7 +173,7 @@ void Buzz_accumulateBlock(
 );
 
 // Start a batch update epoch and allow to submit update requests
-// This call is collective, not thread-safe
+// This call is not collective, not thread-safe
 void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat);
 
 // Execute all update requests in the queues
@@ -181,7 +181,7 @@ void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat);
 void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat);
 
 // Stop a batch update epoch and disallow to submit update requests
-// This call is collective, not thread-safe
+// This call is not collective, not thread-safe
 void Buzz_stopBatchUpdate(Buzz_Matrix_t Buzz_mat);
 
 // Add a request to put a block to all related processes using 
@@ -229,7 +229,8 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat);
 // [in]  col_num    : Number of columns the required block has
 // [out] *src_buf   : Receive buffer
 // [in]  src_buf_ld : Leading dimension of the received buffer
-void Buzz_getBlockFromProcess(
+// [out] @return    : Number of RMA requests issued
+int Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, 
 	int row_start, int row_num,
 	int col_start, int col_num,

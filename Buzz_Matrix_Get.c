@@ -21,7 +21,7 @@ void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 	MPI_Barrier(Buzz_mat->mpi_comm);
 }
 
-void Buzz_getBlockFromProcess(
+int Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, 
 	int row_start, int row_num,
 	int col_start, int col_num,
@@ -38,31 +38,25 @@ void Buzz_getBlockFromProcess(
 	int dst_col_start = bm->c_displs[dst_colblk];
 	int dst_row_end   = bm->r_displs[dst_rowblk + 1];
 	int dst_col_end   = bm->c_displs[dst_colblk + 1];
+	int ret = 0;
 	
 	// Sanity check
 	if ((row_start < dst_row_start) ||
 	    (col_start < dst_col_start) ||
 	    (row_end   > dst_row_end)   ||
 	    (col_end   > dst_col_end)   ||
-		(row_num   * col_num == 0)) return;
+		(row_num   * col_num == 0)) return ret;
 	
 	// Check if the target process is in the shared memory communicator
-	int  shm_target = -1;
-	void *shm_ptr   = NULL;
-	for (int i = 0; i < bm->shm_size; i++)
-		if (bm->shm_global_ranks[i] == dst_rank)
-		{
-			shm_target = i;
-			shm_ptr = bm->shm_mat_blocks[i];
-			break;
-		}
+	int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
+	void *shm_ptr = (shm_rank == -1) ? NULL : bm->shm_mat_blocks[shm_rank];
 		
 	// Use memcpy instead of MPI_Get for shared memory window
 	char *src_ptr = (char*) src_buf;
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
-	if (shm_target != -1)
+	if (shm_rank != -1)
 	{
 		// Target process and current process is in same node, use memcpy
 		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
@@ -99,6 +93,7 @@ void Buzz_getBlockFromProcess(
 					MPI_Type_free(&rcv_dt);
 				}
 			}
+			ret = 1;
 		} else {   
 			// Doesn't has predefined MPI data type
 			if (row_num > MPI_DT_SB_DIM_MAX)
@@ -112,6 +107,7 @@ void Buzz_getBlockFromProcess(
 				MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, bm->mpi_win);
 				MPI_Type_free(&dst_dt);
 				MPI_Type_free(&rcv_dt);
+				ret = 1;
 			} else {
 				// A few long rows, use direct get
 				for (int irow = 0; irow < row_num; irow++)
@@ -121,9 +117,11 @@ void Buzz_getBlockFromProcess(
 					src_ptr += src_ptr_ld;
 					dst_pos += dst_blk_ld;
 				}
+				ret = row_num;
 			}
 		}
 	}
+	return ret;
 }
 
 void Buzz_getBlock(
@@ -183,11 +181,11 @@ void Buzz_getBlock(
 			int col_dist  = blk_c_s - col_start;
 			char *blk_ptr = (char*) src_buf;
 			blk_ptr += (row_dist * src_buf_ld + col_dist) * bm->unit_size;
-			Buzz_getBlockFromProcess(
+			int nGet = Buzz_getBlockFromProcess(
 				bm, dst_rank, blk_r_s, blk_r_num, 
 				blk_c_s, blk_c_num, blk_ptr, src_buf_ld
 			);
-			if (dst_rank != bm->my_rank) proc_cnt[dst_rank] += blk_r_num;
+			proc_cnt[dst_rank] += nGet;
 		}
 	}
 }
@@ -196,11 +194,14 @@ void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	for (int i = 0; i < bm->comm_size; i++)
-		if (proc_cnt[i] > 0)
+	{
+		int dst_rank = (i + bm->my_rank) % bm->comm_size;
+		if (proc_cnt[dst_rank] > 0)
 		{
-			MPI_Win_flush(i, bm->mpi_win);
-			proc_cnt[i] = 0;
+			MPI_Win_flush(dst_rank, bm->mpi_win);
+			proc_cnt[dst_rank] = 0;
 		}
+	}
 }
 
 int Buzz_getBlockList(
