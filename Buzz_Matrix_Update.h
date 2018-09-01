@@ -5,7 +5,6 @@
 #include "Buzz_Matrix_Typedef.h"
 
 // Update (put or accumulate) a block to a process using MPI_Accumulate
-// Blocking, target process will be locked with MPI_Win_lock
 // This function should not be directly called, use Buzz_updateBlock() instead
 // [in] dst_rank   : Target process
 // [in] op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
@@ -15,7 +14,8 @@
 // [in] col_num    : Number of columns the required block has
 // [in] *src_buf   : Source buffer
 // [in] src_buf_ld : Leading dimension of the source buffer
-// [in] dst_locked : If the target rank has been locked with MPI_Win_lock
+// [in] dst_locked : If the target rank has been locked with MPI_Win_lock, = 0 will 
+//                   use MPI_Win_lock & MPI_Win_unlock and the function is blocking
 void Buzz_updateBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
 	int row_start, int row_num,
@@ -53,9 +53,9 @@ void Buzz_accumulateBlockToProcess(
 // [in] col_num    : Number of columns the required block has
 // [in] *src_buf   : Receive buffer
 // [in] src_buf_ld : Leading dimension of the received buffer
-// [in] blocking   : If blocking = 0, the update request will be put in queues and finished
-//                   later with Buzz_execBatchUpdate(); otherwise the update is finished when
-//                   this function returns
+// [in] blocking   : If blocking = 0, the update request will be put in queues and 
+//                   finished later with Buzz_execBatchUpdate(); otherwise the update 
+//                   is finished when this function returns
 void Buzz_updateBlock(
 	Buzz_Matrix_t Buzz_mat, MPI_Op op, 
 	int row_start, int row_num,

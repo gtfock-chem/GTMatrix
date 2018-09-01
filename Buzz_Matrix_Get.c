@@ -7,25 +7,12 @@
 #include "Buzz_Matrix.h"
 #include "utils.h"
 
-void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
-{
-	MPI_Barrier(Buzz_mat->mpi_comm);
-	MPI_Win_lock_all(0, Buzz_mat->mpi_win);
-	MPI_Win_lock_all(0, Buzz_mat->shm_win);
-}
-
-void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
-{
-	MPI_Win_unlock_all(Buzz_mat->shm_win);
-	MPI_Win_unlock_all(Buzz_mat->mpi_win);
-	MPI_Barrier(Buzz_mat->mpi_comm);
-}
-
 int Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld,
+	int dst_locked
 )
 {
 	Buzz_Matrix_t bm  = Buzz_mat;
@@ -56,8 +43,12 @@ int Buzz_getBlockFromProcess(
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
+	if (dst_locked == 0)
+		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
 	if (shm_rank != -1)
 	{
+		if (dst_locked == 0)
+			MPI_Win_lock(MPI_LOCK_SHARED, shm_rank, 0, bm->shm_win);
 		// Target process and current process is in same node, use memcpy
 		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
@@ -68,6 +59,8 @@ int Buzz_getBlockFromProcess(
 			src_ptr += src_ptr_ld;
 			dst_ptr += dst_ptr_ld;
 		}
+		if (dst_locked == 0)
+			MPI_Win_unlock(shm_rank, bm->shm_win);
 	} else {
 		// Target process and current process isn't in same node, use MPI_Get
 		int src_ptr_ld = src_buf_ld * bm->unit_size;
@@ -121,6 +114,11 @@ int Buzz_getBlockFromProcess(
 			}
 		}
 	}
+	if (dst_locked == 0)
+	{
+		MPI_Win_unlock(dst_rank, bm->mpi_win);
+		ret = 0;
+	}
 	return ret;
 }
 
@@ -128,10 +126,13 @@ void Buzz_getBlock(
 	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, int send_req
+	void *src_buf, int src_buf_ld, 
+	int blocking,  int is_mt
 )
 {
 	Buzz_Matrix_t bm = Buzz_mat;
+	
+	if (blocking && is_mt) return;
 	
 	// Sanity check
 	if ((row_start < 0) || (col_start < 0) ||
@@ -183,13 +184,21 @@ void Buzz_getBlock(
 			blk_ptr += (row_dist * src_buf_ld + col_dist) * bm->unit_size;
 			Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
 			
-			if (send_req)
+			if (is_mt)
 			{
 				int nGet = Buzz_getBlockFromProcess(
 					bm, dst_rank, blk_r_s, blk_r_num, 
-					blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 				);
 				proc_cnt[dst_rank] += nGet;
+			} 
+			
+			if (blocking)
+			{
+				Buzz_getBlockFromProcess(
+					bm, dst_rank, blk_r_s, blk_r_num, 
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 0
+				);
 			} else {
 				Buzz_pushToReqVector(
 					req_vec, MPI_REPLACE, blk_r_s, blk_r_num, 
@@ -211,9 +220,26 @@ void Buzz_addGetBlockRequest(
 		Buzz_mat, Buzz_mat->proc_cnt,
 		row_start, row_num,
 		col_start, col_num,
-		src_buf, src_buf_ld, 0
+		src_buf, src_buf_ld, 
+		0, 0
 	);
 }
+
+
+void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
+{
+	MPI_Barrier(Buzz_mat->mpi_comm);
+	MPI_Win_lock_all(0, Buzz_mat->mpi_win);
+	MPI_Win_lock_all(0, Buzz_mat->shm_win);
+}
+
+void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
+{
+	MPI_Win_unlock_all(Buzz_mat->shm_win);
+	MPI_Win_unlock_all(Buzz_mat->mpi_win);
+	MPI_Barrier(Buzz_mat->mpi_comm);
+}
+
 
 void Buzz_flushProcListGetRequests(Buzz_Matrix_t Buzz_mat, int *proc_cnt)
 {
@@ -258,8 +284,11 @@ int Buzz_getBlockList_mt(
 		}
 		
 		Buzz_getBlock(
-			bm, proc_cnt, row_start[i], row_num[i],	col_start[i], col_num[i], 
-			(void*) thread_rcv_ptr, col_num[i], 1
+			bm, proc_cnt, 
+			row_start[i], row_num[i],
+			col_start[i], col_num[i], 
+			(void*) thread_rcv_ptr, col_num[i], 
+			0, 1
 		);
 		thread_rcv_ptr += block_bytes;
 	}
@@ -307,7 +336,7 @@ void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
 			int src_buf_ld = req_vec->src_buf_lds[i];
 			int nGet = Buzz_getBlockFromProcess(
 				bm, dst_rank, blk_r_s, blk_r_num, 
-				blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+				blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 			);
 			bm->proc_cnt[dst_rank] += nGet;
 		}

@@ -5,7 +5,6 @@
 #include "Buzz_Matrix_Typedef.h"
 
 // Get a block from a process using MPI_Get
-// Non-blocking, data may not be ready before synchronization
 // This function should not be directly called, use Buzz_getBlock() instead
 // [in]  dst_proc   : Target process
 // [in]  row_start  : 1st row of the required block
@@ -15,11 +14,14 @@
 // [out] *src_buf   : Receive buffer
 // [in]  src_buf_ld : Leading dimension of the received buffer
 // [out] @return    : Number of RMA requests issued
+// [in] dst_locked : If the target rank has been locked with MPI_Win_lock, = 0 will 
+//                   use MPI_Win_lock & MPI_Win_unlock and the function is blocking
 int Buzz_getBlockFromProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld,
+	int dst_locked
 );
 
 // Get a block from all related processes using MPI_Get
@@ -32,15 +34,17 @@ int Buzz_getBlockFromProcess(
 // [in]  col_num    : Number of columns the required block has
 // [out] *src_buf   : Receive buffer
 // [in]  src_buf_ld : Leading dimension of the received buffer
-// [in]  send_req   : If this value is 1, then this function is thread-safe, it 
-//                    will call Buzz_getBlockFromProcess(); if the value is 0,
-//                    this function is not thread-safe, it will add a get request
-//                    which will be handled later using Buzz_execBatchGet()
+// [in]  blocking   : If blocking = 0, the update request will be put in queues and 
+//                    finished later with Buzz_execBatchUpdate(); otherwise the update 
+//                    is finished when this function returns
+// [in] is_mt       : = 1 means this function is called from a multi-thread region and
+//                    blocking should be 0
 void Buzz_getBlock(
 	Buzz_Matrix_t Buzz_mat, int *proc_cnt, 
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, int send_req
+	void *src_buf, int src_buf_ld, 
+	int blocking,  int is_mt
 );
 
 // Add a get to put a block to all related processes using 
