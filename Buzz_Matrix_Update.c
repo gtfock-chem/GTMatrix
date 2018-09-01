@@ -69,7 +69,7 @@ void Buzz_updateBlockToProcess(
 				int *dst_ptr_ = (int*) dst_ptr;
 				for (int irow = 0; irow < row_num; irow++)
 				{
-					#pragma vector
+					#pragma simd
 					for (int icol = 0; icol < col_num; icol++)
 						dst_ptr_[icol] += src_ptr_[icol];
 					src_ptr_ += src_buf_ld;
@@ -82,7 +82,7 @@ void Buzz_updateBlockToProcess(
 				double *dst_ptr_ = (double*) dst_ptr;
 				for (int irow = 0; irow < row_num; irow++)
 				{
-					#pragma vector
+					#pragma simd
 					for (int icol = 0; icol < col_num; icol++)
 						dst_ptr_[icol] += src_ptr_[icol];
 					src_ptr_ += src_buf_ld;
@@ -230,7 +230,6 @@ void Buzz_updateBlock(
 void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
-	
 	bm->is_batch_updating = 1;
 	for (int i = 0; i < bm->comm_size; i++)
 		Buzz_resetReqVector(bm->req_vec[i]);
@@ -241,15 +240,15 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 
 	for (int _dst_rank = bm->my_rank; _dst_rank < bm->comm_size + bm->my_rank; _dst_rank++)
-	{
+	{	
 		int dst_rank = _dst_rank % bm->comm_size;
-		int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
+		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
+		if (req_vec->curr_size == 0) continue;
+		
+		int shm_rank = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
 
 		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
 		if (shm_rank != -1) MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_rank, 0, bm->shm_win);
-		
-
-		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
 		for (int i = 0; i < req_vec->curr_size; i++)
 		{
 			MPI_Op op      = req_vec->ops[i];
@@ -264,17 +263,16 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 				blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 			);
 		}
-		Buzz_resetReqVector(req_vec);
-
 		if (shm_rank != -1) MPI_Win_unlock(shm_rank, bm->shm_win);
 		MPI_Win_unlock(dst_rank, bm->mpi_win);
+		
+		Buzz_resetReqVector(req_vec);
 	}
 }
 
 void Buzz_stopBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
-	
 	bm->is_batch_updating = 0;
 }
 
