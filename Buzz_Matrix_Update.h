@@ -15,12 +15,13 @@
 // [in] col_num    : Number of columns the required block has
 // [in] *src_buf   : Source buffer
 // [in] src_buf_ld : Leading dimension of the source buffer
+// [in] dst_locked : If the target rank has been locked with MPI_Win_lock
 void Buzz_updateBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
 	int row_start, int row_num,
 	int col_start, int col_num,
 	void *src_buf, int src_buf_ld, 
-	int update_target_locked
+	int dst_locked
 );
 
 // Put a block to a process using Buzz_updateBlockToProcess()
@@ -29,7 +30,8 @@ void Buzz_putBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank,
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld, 
+	int dst_locked
 );
 
 // Accumulate a block to a process using Buzz_updateBlockToProcess()
@@ -38,7 +40,8 @@ void Buzz_accumulateBlockToProcess(
 	Buzz_Matrix_t Buzz_mat, int dst_rank,
 	int row_start, int row_num,
 	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+	void *src_buf, int src_buf_ld, 
+	int dst_locked
 );
 
 // Update (put or accumulate) a block to all related processes using MPI_Accumulate

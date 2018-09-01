@@ -12,7 +12,7 @@ void Buzz_updateBlockToProcess(
 	int row_start, int row_num,
 	int col_start, int col_num,
 	void *src_buf, int src_buf_ld,
-	int update_target_locked
+	int dst_locked
 )
 {
 	Buzz_Matrix_t bm  = Buzz_mat;
@@ -42,11 +42,11 @@ void Buzz_updateBlockToProcess(
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
-	if (update_target_locked == 0)
+	if (dst_locked == 0)
 		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
 	if (shm_rank != -1)
 	{
-		if (update_target_locked == 0)
+		if (dst_locked == 0)
 			MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_rank, 0, bm->shm_win);
 		// Target process and current process is in same node, use memcpy
 		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
@@ -90,7 +90,7 @@ void Buzz_updateBlockToProcess(
 				}
 			}
 		}
-		if (update_target_locked == 0)
+		if (dst_locked == 0)
 			MPI_Win_unlock(shm_rank, bm->shm_win);
 	} else {
 		// Target process and current process isn't in same node, use MPI_Accumulate
@@ -144,8 +144,40 @@ void Buzz_updateBlockToProcess(
 			}
 		}
 	}
-	if (update_target_locked == 0)
+	if (dst_locked == 0)
 		MPI_Win_unlock(dst_rank, bm->mpi_win);
+}
+
+void Buzz_putBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld,
+	int dst_locked
+)
+{
+	Buzz_updateBlockToProcess(
+		Buzz_mat, dst_rank, MPI_REPLACE,
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, dst_locked
+	);
+}
+
+void Buzz_accumulateBlockToProcess(
+	Buzz_Matrix_t Buzz_mat, int dst_rank,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld,
+	int dst_locked
+)
+{
+	Buzz_updateBlockToProcess(
+		Buzz_mat, dst_rank, MPI_SUM,
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, dst_locked
+	);
 }
 
 void Buzz_updateBlock(
@@ -227,6 +259,67 @@ void Buzz_updateBlock(
 	}
 }
 
+void Buzz_putBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_REPLACE, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, 1
+	);
+}
+
+void Buzz_accumulateBlock(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_SUM, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, 1
+	);
+}
+
+void Buzz_addPutBlockRequest(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_REPLACE, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, 0
+	);
+}
+
+void Buzz_addAccumulateBlockRequest(
+	Buzz_Matrix_t Buzz_mat,
+	int row_start, int row_num,
+	int col_start, int col_num,
+	void *src_buf, int src_buf_ld
+)
+{
+	Buzz_updateBlock(
+		Buzz_mat, MPI_SUM, 
+		row_start, row_num,
+		col_start, col_num,
+		src_buf, src_buf_ld, 0
+	);
+}
+
+
 void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
@@ -278,93 +371,4 @@ void Buzz_stopBatchUpdate(Buzz_Matrix_t Buzz_mat)
 	bm->is_batch_updating = 0;
 }
 
-void Buzz_putBlock(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlock(
-		Buzz_mat, MPI_REPLACE, 
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 1
-	);
-}
-
-void Buzz_addPutBlockRequest(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlock(
-		Buzz_mat, MPI_REPLACE, 
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 0
-	);
-}
-
-void Buzz_accumulateBlock(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlock(
-		Buzz_mat, MPI_SUM, 
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 1
-	);
-}
-
-void Buzz_addAccumulateBlockRequest(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlock(
-		Buzz_mat, MPI_SUM, 
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 0
-	);
-}
-
-void Buzz_putBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlockToProcess(
-		Buzz_mat, dst_rank, MPI_REPLACE,
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 0
-	);
-}
-
-void Buzz_accumulateBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
-)
-{
-	Buzz_updateBlockToProcess(
-		Buzz_mat, dst_rank, MPI_SUM,
-		row_start, row_num,
-		col_start, col_num,
-		src_buf, src_buf_ld, 0
-	);
-}
 
