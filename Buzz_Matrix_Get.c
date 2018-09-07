@@ -191,19 +191,19 @@ void Buzz_getBlock(
 					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 				);
 				proc_cnt[dst_rank] += nGet;
-			} 
-			
-			if (blocking)
-			{
-				Buzz_getBlockFromProcess(
-					bm, dst_rank, blk_r_s, blk_r_num, 
-					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 0
-				);
 			} else {
-				Buzz_pushToReqVector(
-					req_vec, MPI_REPLACE, blk_r_s, blk_r_num, 
-					blk_c_s, blk_c_num, blk_ptr, src_buf_ld
-				);
+				if (blocking)
+				{
+					Buzz_getBlockFromProcess(
+						bm, dst_rank, blk_r_s, blk_r_num, 
+						blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 0
+					);
+				} else {
+					Buzz_pushToReqVector(
+						req_vec, MPI_REPLACE, blk_r_s, blk_r_num, 
+						blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+					);
+				}
 			}
 		}
 	}
