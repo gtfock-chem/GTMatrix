@@ -58,6 +58,9 @@ int main(int argc, char **argv)
 	
 	Buzz_execBatchUpdate(bm);
 	Buzz_stopBatchUpdate(bm);
+	
+	// Wait all process to finish their update
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (my_rank == ACTOR_RANK)
 	{
