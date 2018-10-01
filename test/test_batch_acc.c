@@ -9,7 +9,18 @@
 
 #define ACTOR_RANK 4
 
-// mpirun -np 9 ./test_Get_Put.x
+/*
+Run with: mpirun -np 9 ./test_batch_acc.x
+Correct output:
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36	
+ 36	 36	 36	 36	 36	 36	 36	 36 
+*/
 
 int main(int argc, char **argv)
 {
@@ -43,20 +54,16 @@ int main(int argc, char **argv)
 	
 	for (int irow = 0; irow < 8; irow++)
 		Buzz_addAccumulateBlockRequest(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
-		//Buzz_accumulateBlock(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
 	printf("Rank %d add requests done\n", my_rank);
 	
 	Buzz_execBatchUpdate(bm);
 	Buzz_stopBatchUpdate(bm);
 
-	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	if (my_rank == ACTOR_RANK)
 	{
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 8, 0, 8, &mat[0], 8);
-		Buzz_flushProcListGetRequests(bm, bm->proc_cnt);
+		Buzz_getBlock(bm, bm->proc_cnt, 0, 8, 0, 8, &mat[0], 8, 1, 0);
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
-	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	

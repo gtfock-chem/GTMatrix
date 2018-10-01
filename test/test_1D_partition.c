@@ -9,7 +9,19 @@
 
 #define ACTOR_RANK 3
 
-// mpirun -np 4 ./test_Get_Put.x
+/*
+Run with: mpirun -np 4 ./test_1D_partition.x
+Correct output:
+ 10.0000	 10.0000	 10.0000	 10.0000	 10.0000	 10.0000	 10.0000	 10.0000	
+ 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	
+ 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	 11.0000	
+ 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	
+ 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	 12.0000	
+ 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	
+ 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	
+ 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	
+ 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000	 13.0000
+*/
 
 int main(int argc, char **argv)
 {
@@ -37,13 +49,11 @@ int main(int argc, char **argv)
 	double d = 10.0 + (double) my_rank;
 	Buzz_fillBuzzMatrix(bm, &d);
 
-	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	if (my_rank == ACTOR_RANK)
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 9, 0, 8, &mat[0], 8);
-	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
-
-	if (my_rank == ACTOR_RANK)
+	{
+		Buzz_getBlock(bm, bm->proc_cnt, 0, 9, 0, 8, &mat[0], 8, 1, 0);
 		print_double_mat(&mat[0], 8, 9, 8, "Recv matrix");
+	}
 
 	Buzz_destroyBuzzMatrix(bm);
 
