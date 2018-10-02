@@ -33,117 +33,66 @@ void Buzz_updateBlockToProcess(
 	    (col_end   > dst_col_end)   ||
 		(row_num   * col_num == 0)) return;
 	
-	// Check if the target process is in the shared memory communicator
-	int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
-	void *shm_ptr = (shm_rank == -1) ? NULL : bm->shm_mat_blocks[shm_rank];
-	
 	// Update dst block
 	char *src_ptr = (char*) src_buf;
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
+	
 	if (dst_locked == 0)
 		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
-	if (shm_rank != -1)
+	
+	// Always use MPI_Accumulate in mpi_win to guarantee the atomicity
+	int src_ptr_ld = src_buf_ld * bm->unit_size;
+	if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
 	{
-		if (dst_locked == 0)
-			MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_rank, 0, bm->shm_win);
-		// Target process and current process is in same node, use memcpy
-		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
-		int src_ptr_ld = src_buf_ld * bm->unit_size;
-		int dst_ptr_ld = dst_blk_ld * bm->unit_size;
-		if (MPI_REPLACE == op)  // Replace, == MPI_Put, use memcpy 
+		// Block is small, use predefined data type or define a new 
+		// data type to reduce MPI_Accumulate overhead
+		int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
+		MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
+		if (col_num == src_buf_ld)
 		{
+			MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
+			MPI_Accumulate(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
+		} else {
+			if (col_num == bm->ld_local)
+			{
+				MPI_Accumulate(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
+			} else {
+				MPI_Datatype rcv_dt;
+				MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
+				MPI_Type_commit(&rcv_dt);
+				MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
+				MPI_Type_free(&rcv_dt);
+			}
+		}
+	} else {   
+		// Doesn't has predefined MPI data type
+		if (row_num > MPI_DT_SB_DIM_MAX)
+		{
+			// Many rows, define a MPI data type to reduce number of request
+			MPI_Datatype dst_dt, rcv_dt;
+			MPI_Type_vector(row_num, col_num, dst_blk_ld, bm->datatype, &dst_dt);
+			MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
+			MPI_Type_commit(&dst_dt);
+			MPI_Type_commit(&rcv_dt);
+			MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, op, bm->mpi_win);
+			MPI_Type_free(&dst_dt);
+			MPI_Type_free(&rcv_dt);
+		} else {
+			// A few long rows, use direct put
 			for (int irow = 0; irow < row_num; irow++)
 			{
-				memcpy(dst_ptr, src_ptr, row_bytes);
+				MPI_Accumulate(
+					src_ptr, col_num, bm->datatype, dst_rank, 
+					dst_pos, col_num, bm->datatype, op, bm->mpi_win
+				);
 				src_ptr += src_ptr_ld;
-				dst_ptr += dst_ptr_ld;
-			}
-		}
-		if (MPI_SUM == op)      // Sum, need to judge the data type of matrix elements
-		{
-			if (MPI_INT == bm->datatype)
-			{
-				int *src_ptr_ = (int*) src_ptr;
-				int *dst_ptr_ = (int*) dst_ptr;
-				for (int irow = 0; irow < row_num; irow++)
-				{
-					#pragma simd
-					for (int icol = 0; icol < col_num; icol++)
-						dst_ptr_[icol] += src_ptr_[icol];
-					src_ptr_ += src_buf_ld;
-					dst_ptr_ += dst_blk_ld;
-				}
-			}
-			if (MPI_DOUBLE == bm->datatype)
-			{
-				double *src_ptr_ = (double*) src_ptr;
-				double *dst_ptr_ = (double*) dst_ptr;
-				for (int irow = 0; irow < row_num; irow++)
-				{
-					#pragma simd
-					for (int icol = 0; icol < col_num; icol++)
-						dst_ptr_[icol] += src_ptr_[icol];
-					src_ptr_ += src_buf_ld;
-					dst_ptr_ += dst_blk_ld;
-				}
-			}
-		}
-		if (dst_locked == 0)
-			MPI_Win_unlock(shm_rank, bm->shm_win);
-	} else {
-		// Target process and current process isn't in same node, use MPI_Accumulate
-		int src_ptr_ld = src_buf_ld * bm->unit_size;
-		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
-		{
-			// Block is small, use predefined data type or define a new 
-			// data type to reduce MPI_Accumulate overhead
-			int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
-			MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
-			if (col_num == src_buf_ld)
-			{
-				MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
-				MPI_Accumulate(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
-			} else {
-				if (col_num == bm->ld_local)
-				{
-					MPI_Accumulate(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
-				} else {
-					MPI_Datatype rcv_dt;
-					MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
-					MPI_Type_commit(&rcv_dt);
-					MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, op, bm->mpi_win);
-					MPI_Type_free(&rcv_dt);
-				}
-			}
-		} else {   
-			// Doesn't has predefined MPI data type
-			if (row_num > MPI_DT_SB_DIM_MAX)
-			{
-				// Many rows, define a MPI data type to reduce number of request
-				MPI_Datatype dst_dt, rcv_dt;
-				MPI_Type_vector(row_num, col_num, dst_blk_ld, bm->datatype, &dst_dt);
-				MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
-				MPI_Type_commit(&dst_dt);
-				MPI_Type_commit(&rcv_dt);
-				MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, op, bm->mpi_win);
-				MPI_Type_free(&dst_dt);
-				MPI_Type_free(&rcv_dt);
-			} else {
-				// A few long rows, use direct put
-				for (int irow = 0; irow < row_num; irow++)
-				{
-					MPI_Accumulate(
-						src_ptr, col_num, bm->datatype, dst_rank, 
-						dst_pos, col_num, bm->datatype, op, bm->mpi_win
-					);
-					src_ptr += src_ptr_ld;
-					dst_pos += dst_blk_ld;
-				}
+				dst_pos += dst_blk_ld;
 			}
 		}
 	}
+	
 	if (dst_locked == 0)
 		MPI_Win_unlock(dst_rank, bm->mpi_win);
 }
@@ -319,7 +268,6 @@ void Buzz_addAccumulateBlockRequest(
 	);
 }
 
-
 void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
@@ -340,10 +288,7 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
 		if (req_vec->curr_size == 0) continue;
 		
-		int shm_rank = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
-
 		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
-		if (shm_rank != -1) MPI_Win_lock(MPI_LOCK_EXCLUSIVE, shm_rank, 0, bm->shm_win);
 		for (int i = 0; i < req_vec->curr_size; i++)
 		{
 			MPI_Op op      = req_vec->ops[i];
@@ -358,7 +303,6 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 				blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 			);
 		}
-		if (shm_rank != -1) MPI_Win_unlock(shm_rank, bm->shm_win);
 		MPI_Win_unlock(dst_rank, bm->mpi_win);
 		
 		Buzz_resetReqVector(req_vec);
@@ -370,5 +314,3 @@ void Buzz_stopBatchUpdate(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 	bm->is_batch_updating = 0;
 }
-
-
