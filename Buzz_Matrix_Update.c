@@ -38,9 +38,12 @@ void Buzz_updateBlockToProcess(
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
-	
+
+	// For accumulation, only element-wise atomicity is needed, use MPI_LOCK_SHARED
+	// For replacement, user should guarantee the write sequence and handle conflict,
+	// still use MPI_LOCK_SHARED
 	if (dst_locked == 0)
-		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
+		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
 	
 	// Always use MPI_Accumulate in mpi_win to guarantee the atomicity
 	int src_ptr_ld = src_buf_ld * bm->unit_size;
@@ -288,7 +291,10 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
 		if (req_vec->curr_size == 0) continue;
 		
-		MPI_Win_lock(MPI_LOCK_EXCLUSIVE, dst_rank, 0, bm->mpi_win);
+		// For accumulation, only element-wise atomicity is needed, use MPI_LOCK_SHARED
+		// For replacement, user should guarantee the write sequence and handle conflict,
+		// still use MPI_LOCK_SHARED
+		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
 		for (int i = 0; i < req_vec->curr_size; i++)
 		{
 			MPI_Op op      = req_vec->ops[i];

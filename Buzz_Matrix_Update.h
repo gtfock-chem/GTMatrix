@@ -4,6 +4,9 @@
 #include <mpi.h>
 #include "Buzz_Matrix_Typedef.h"
 
+// Notice: user should guarantee the write sequence is correct or write targets
+// do not overlap with each other when putting blocks of data. 
+
 // Update (put or accumulate) a block to a process using MPI_Accumulate
 // This function should not be directly called, use Buzz_updateBlock() instead
 // [in] dst_rank   : Target process
