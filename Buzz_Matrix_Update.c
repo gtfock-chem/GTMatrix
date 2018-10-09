@@ -45,7 +45,6 @@ void Buzz_updateBlockToProcess(
 	if (dst_locked == 0)
 		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
 	
-	// Always use MPI_Accumulate in mpi_win to guarantee the atomicity
 	int src_ptr_ld = src_buf_ld * bm->unit_size;
 	if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
 	{
@@ -275,9 +274,11 @@ void Buzz_startBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	if (bm->is_batch_getting) return;
-	bm->is_batch_updating = 1;
+	
+	MPI_Win_lock_all(0, bm->mpi_win);
 	for (int i = 0; i < bm->comm_size; i++)
 		Buzz_resetReqVector(bm->req_vec[i]);
+	bm->is_batch_updating = 1;
 }
 
 void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
@@ -289,27 +290,24 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 	{	
 		int dst_rank = _dst_rank % bm->comm_size;
 		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
-		if (req_vec->curr_size == 0) continue;
 		
-		// For accumulation, only element-wise atomicity is needed, use MPI_LOCK_SHARED
-		// For replacement, user should guarantee the write sequence and handle conflict,
-		// still use MPI_LOCK_SHARED
-		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
-		for (int i = 0; i < req_vec->curr_size; i++)
+		if (req_vec->curr_size > 0) 
 		{
-			MPI_Op op      = req_vec->ops[i];
-			int blk_r_s    = req_vec->row_starts[i];
-			int blk_r_num  = req_vec->row_nums[i];
-			int blk_c_s    = req_vec->col_starts[i];
-			int blk_c_num  = req_vec->col_nums[i];
-			void *blk_ptr  = req_vec->src_bufs[i];
-			int src_buf_ld = req_vec->src_buf_lds[i];
-			Buzz_updateBlockToProcess(
-				bm, dst_rank, op, blk_r_s, blk_r_num, 
-				blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
-			);
+			for (int i = 0; i < req_vec->curr_size; i++)
+			{
+				MPI_Op op      = req_vec->ops[i];
+				int blk_r_s    = req_vec->row_starts[i];
+				int blk_r_num  = req_vec->row_nums[i];
+				int blk_c_s    = req_vec->col_starts[i];
+				int blk_c_num  = req_vec->col_nums[i];
+				void *blk_ptr  = req_vec->src_bufs[i];
+				int src_buf_ld = req_vec->src_buf_lds[i];
+				Buzz_updateBlockToProcess(
+					bm, dst_rank, op, blk_r_s, blk_r_num, 
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
+				);
+			}
 		}
-		MPI_Win_unlock(dst_rank, bm->mpi_win);
 		
 		Buzz_resetReqVector(req_vec);
 	}
@@ -318,5 +316,8 @@ void Buzz_execBatchUpdate(Buzz_Matrix_t Buzz_mat)
 void Buzz_stopBatchUpdate(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->is_batch_updating == 0) return;
+	
+	MPI_Win_unlock_all(bm->mpi_win);
 	bm->is_batch_updating = 0;
 }
