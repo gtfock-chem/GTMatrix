@@ -75,7 +75,7 @@ int Buzz_getBlockFromProcess(
 				MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
 				MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
 			} else {
-				if (col_num == bm->ld_local)
+				if (bm->ld_local == src_buf_ld)
 				{
 					MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
 				} else {
