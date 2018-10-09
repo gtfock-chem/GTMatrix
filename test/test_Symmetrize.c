@@ -66,17 +66,21 @@ int main(int argc, char **argv)
 	
 	if (my_rank == ACTOR_RANK)
 	{
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 10, 0, 10, &mat[0], 10, 1, 0);
+		Buzz_getBlock(bm, 0, 10, 0, 10, &mat[0], 10, 1);
 		print_double_mat(&mat[0], 10, 10, 10, "Initial matrix");
 	}
+	
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	// Symmetrizing
 	Buzz_symmetrizeBuzzMatrix(bm);
 	if (my_rank == ACTOR_RANK)
 	{
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 10, 0, 10, &mat[0], 10, 1, 0);
+		Buzz_getBlock(bm, 0, 10, 0, 10, &mat[0], 10, 1);
 		print_double_mat(&mat[0], 10, 10, 10, "Symmetrized matrix");
 	}
+	
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	

@@ -42,7 +42,6 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	// This process holds [rs:re, cs:ce], need to fetch [cs:ce, rs:re]
 	void *rcv_buf = bm->symm_buf;
 
-	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	int my_row_start = bm->r_displs[bm->my_rowblk];
 	int my_col_start = bm->c_displs[bm->my_colblk];
 	Buzz_startBatchGet(bm);
@@ -54,7 +53,6 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	);
 	Buzz_execBatchGet(bm);
 	Buzz_stopBatchGet(bm);
-	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
 	
 	if (MPI_INT == bm->datatype)
 	{
@@ -86,5 +84,4 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 			}
 		}
 	}
-	MPI_Barrier(bm->mpi_comm);
 }

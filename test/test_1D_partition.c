@@ -51,10 +51,12 @@ int main(int argc, char **argv)
 
 	if (my_rank == ACTOR_RANK)
 	{
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 9, 0, 8, &mat[0], 8, 1, 0);
+		Buzz_getBlock(bm, 0, 9, 0, 8, &mat[0], 8, 1);
 		print_double_mat(&mat[0], 8, 9, 8, "Recv matrix");
 	}
 
+	MPI_Barrier(MPI_COMM_WORLD);
+	
 	Buzz_destroyBuzzMatrix(bm);
 
 	MPI_Finalize();

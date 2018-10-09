@@ -33,7 +33,6 @@ void Buzz_updateBlockToProcess(
 	    (col_end   > dst_col_end)   ||
 		(row_num   * col_num == 0)) return;
 	
-	// Update dst block
 	char *src_ptr = (char*) src_buf;
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
@@ -166,7 +165,7 @@ void Buzz_updateBlock(
 		    (col_end   < bm->c_displs[i+1])) e_blk_c = i;
 	}
 	
-	// Fetch data from each process
+	// Update data to each process
 	int blk_r_s, blk_r_e, blk_c_s, blk_c_e, need_to_fetch;
 	for (int blk_r = s_blk_r; blk_r <= e_blk_r; blk_r++)      // Notice: <=
 	{

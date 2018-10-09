@@ -65,9 +65,11 @@ int main(int argc, char **argv)
 	if (my_rank == ACTOR_RANK)
 	{
 		for (int i = 0; i < 64; i++) mat[i] = -1;
-		Buzz_getBlock(bm, bm->proc_cnt, 0, 8, 0, 8, &mat[0], 8, 1, 0);
+		Buzz_getBlock(bm, 0, 8, 0, 8, &mat[0], 8, 1);
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
+	
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	
