@@ -33,87 +33,66 @@ int Buzz_getBlockFromProcess(
 	    (row_end   > dst_row_end)   ||
 	    (col_end   > dst_col_end)   ||
 		(row_num   * col_num == 0)) return ret;
-	
-	// Check if the target process is in the shared memory communicator
-	int shm_rank  = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
-	void *shm_ptr = (shm_rank == -1) ? NULL : bm->shm_mat_blocks[shm_rank];
-		
-	// Use memcpy instead of MPI_Get for shared memory window
+
 	char *src_ptr = (char*) src_buf;
 	int row_bytes = col_num * bm->unit_size;
 	int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
 	dst_pos += col_start - dst_col_start;
+
 	if (dst_locked == 0)
 		MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
-	if (shm_rank != -1)
+
+	int src_ptr_ld = src_buf_ld * bm->unit_size;
+	if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
 	{
-		if (dst_locked == 0)
-			MPI_Win_lock(MPI_LOCK_SHARED, shm_rank, 0, bm->shm_win);
-		// Target process and current process is in same node, use memcpy
-		char *dst_ptr  = shm_ptr + dst_pos * bm->unit_size;
-		int src_ptr_ld = src_buf_ld * bm->unit_size;
-		int dst_ptr_ld = dst_blk_ld * bm->unit_size;
-		for (int irow = 0; irow < row_num; irow++)
+		// Block is small, use predefined data type or define a new 
+		// data type to reduce MPI_Get overhead
+		int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
+		MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
+		if (col_num == src_buf_ld)
 		{
-			memcpy(src_ptr, dst_ptr, row_bytes);
-			src_ptr += src_ptr_ld;
-			dst_ptr += dst_ptr_ld;
-		}
-		if (dst_locked == 0)
-			MPI_Win_unlock(shm_rank, bm->shm_win);
-	} else {
-		// Target process and current process isn't in same node, use MPI_Get
-		int src_ptr_ld = src_buf_ld * bm->unit_size;
-		if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
-		{
-			// Block is small, use predefined data type or define a new 
-			// data type to reduce MPI_Get overhead
-			int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
-			MPI_Datatype *dst_dt = &bm->sb_stride[block_dt_id];
-			if (col_num == src_buf_ld)
+			MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
+			MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
+		} else {
+			if (bm->ld_local == src_buf_ld)
 			{
-				MPI_Datatype *rcv_dt_ns = &bm->sb_nostride[block_dt_id];
-				MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
+				MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
 			} else {
-				if (bm->ld_local == src_buf_ld)
-				{
-					MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
-				} else {
-					MPI_Datatype rcv_dt;
-					MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
-					MPI_Type_commit(&rcv_dt);
-					MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
-					MPI_Type_free(&rcv_dt);
-				}
-			}
-			ret = 1;
-		} else {   
-			// Doesn't has predefined MPI data type
-			if (row_num > MPI_DT_SB_DIM_MAX)
-			{
-				// Many rows, define a MPI data type to reduce number of request
-				MPI_Datatype dst_dt, rcv_dt;
-				MPI_Type_vector(row_num, col_num, dst_blk_ld, bm->datatype, &dst_dt);
+				MPI_Datatype rcv_dt;
 				MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
-				MPI_Type_commit(&dst_dt);
 				MPI_Type_commit(&rcv_dt);
-				MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, bm->mpi_win);
-				MPI_Type_free(&dst_dt);
+				MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, bm->mpi_win);
 				MPI_Type_free(&rcv_dt);
-				ret = 1;
-			} else {
-				// A few long rows, use direct get
-				for (int irow = 0; irow < row_num; irow++)
-				{
-					MPI_Get(src_ptr, row_bytes, MPI_BYTE, dst_rank, 
-							dst_pos, row_bytes, MPI_BYTE, bm->mpi_win);
-					src_ptr += src_ptr_ld;
-					dst_pos += dst_blk_ld;
-				}
-				ret = row_num;
 			}
+		}
+		ret = 1;
+	} else {   
+		// Doesn't has predefined MPI data type
+		if (row_num > MPI_DT_SB_DIM_MAX)
+		{
+			// Many rows, define a MPI data type to reduce number of request
+			MPI_Datatype dst_dt, rcv_dt;
+			MPI_Type_vector(row_num, col_num, dst_blk_ld, bm->datatype, &dst_dt);
+			MPI_Type_vector(row_num, col_num, src_buf_ld, bm->datatype, &rcv_dt);
+			MPI_Type_commit(&dst_dt);
+			MPI_Type_commit(&rcv_dt);
+			MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, bm->mpi_win);
+			MPI_Type_free(&dst_dt);
+			MPI_Type_free(&rcv_dt);
+			ret = 1;
+		} else {
+			// A few long rows, use direct get
+			for (int irow = 0; irow < row_num; irow++)
+			{
+				MPI_Get(src_ptr, row_bytes, MPI_BYTE, dst_rank, 
+						dst_pos, row_bytes, MPI_BYTE, bm->mpi_win);
+				src_ptr += src_ptr_ld;
+				dst_pos += dst_blk_ld;
+			}
+			ret = row_num;
 		}
 	}
+
 	if (dst_locked == 0)
 	{
 		MPI_Win_unlock(dst_rank, bm->mpi_win);
@@ -230,12 +209,10 @@ void Buzz_startBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
 	MPI_Barrier(Buzz_mat->mpi_comm);
 	MPI_Win_lock_all(0, Buzz_mat->mpi_win);
-	MPI_Win_lock_all(0, Buzz_mat->shm_win);
 }
 
 void Buzz_stopBuzzMatrixReadOnlyEpoch(Buzz_Matrix_t Buzz_mat)
 {
-	MPI_Win_unlock_all(Buzz_mat->shm_win);
 	MPI_Win_unlock_all(Buzz_mat->mpi_win);
 	MPI_Barrier(Buzz_mat->mpi_comm);
 }
@@ -308,9 +285,10 @@ void Buzz_startBatchGet(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
 	if (bm->is_batch_updating) return;
-	bm->is_batch_getting = 1;
+	
 	for (int i = 0; i < bm->comm_size; i++)
 		Buzz_resetReqVector(bm->req_vec[i]);
+	bm->is_batch_getting = 1;
 }
 
 void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
@@ -322,23 +300,23 @@ void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
 	{	
 		int dst_rank = _dst_rank % bm->comm_size;
 		Buzz_Req_Vector_t req_vec = bm->req_vec[dst_rank];
-		if (req_vec->curr_size == 0) continue;
 		
-		int shm_rank = getElementIndexInArray(dst_rank, bm->shm_global_ranks, bm->shm_size);
-
-		for (int i = 0; i < req_vec->curr_size; i++)
+		if (req_vec->curr_size > 0)
 		{
-			int blk_r_s    = req_vec->row_starts[i];
-			int blk_r_num  = req_vec->row_nums[i];
-			int blk_c_s    = req_vec->col_starts[i];
-			int blk_c_num  = req_vec->col_nums[i];
-			void *blk_ptr  = req_vec->src_bufs[i];
-			int src_buf_ld = req_vec->src_buf_lds[i];
-			int nGet = Buzz_getBlockFromProcess(
-				bm, dst_rank, blk_r_s, blk_r_num, 
-				blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
-			);
-			bm->proc_cnt[dst_rank] += nGet;
+			for (int i = 0; i < req_vec->curr_size; i++)
+			{
+				int blk_r_s    = req_vec->row_starts[i];
+				int blk_r_num  = req_vec->row_nums[i];
+				int blk_c_s    = req_vec->col_starts[i];
+				int blk_c_num  = req_vec->col_nums[i];
+				void *blk_ptr  = req_vec->src_bufs[i];
+				int src_buf_ld = req_vec->src_buf_lds[i];
+				int nGet = Buzz_getBlockFromProcess(
+					bm, dst_rank, blk_r_s, blk_r_num, 
+					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
+				);
+				bm->proc_cnt[dst_rank] += nGet;
+			}
 		}
 		
 		Buzz_resetReqVector(req_vec);
@@ -349,5 +327,7 @@ void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
 void Buzz_stopBatchGet(Buzz_Matrix_t Buzz_mat)
 {
 	Buzz_Matrix_t bm = Buzz_mat;
+	if (bm->is_batch_getting == 0) return;
+	
 	bm->is_batch_getting = 0;
 }
