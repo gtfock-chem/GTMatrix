@@ -10,16 +10,16 @@
 #define ACTOR_RANK 4
 
 /*
-Run with: mpirun -np 9 ./test_batch_acc.x
+Run with: mpirun -np 16 ./test_batch_acc.x
 Correct output:
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36	
- 36	 36	 36	 36	 36	 36	 36	 36 
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120	
+ 120	 120	 120	 120	 120	 120	 120	 120 
 */
 
 int main(int argc, char **argv)
@@ -27,8 +27,8 @@ int main(int argc, char **argv)
 	int provided;
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 	
-	int r_displs[5] = {0, 3, 7, 8};
-	int c_displs[5] = {0, 4, 6, 8};
+	int r_displs[5] = {0, 2, 3, 7, 8};
+	int c_displs[5] = {0, 2, 4, 6, 8};
 	int mat[64];
 	
 	int my_rank;
@@ -39,10 +39,10 @@ int main(int argc, char **argv)
 	
 	Buzz_Matrix_t bm;
 	
-	// 3 * 3 proc grid, matrix size 8 * 8
+	// 4 * 4 proc grid, matrix size 8 * 8
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_INT, 4, my_rank, 8, 8, 
-		3, 3, &r_displs[0], &c_displs[0], 2, 0
+		4, 4, &r_displs[0], &c_displs[0], 2, 0
 	);
 	
 	int ifill = 0;
@@ -64,6 +64,7 @@ int main(int argc, char **argv)
 
 	if (my_rank == ACTOR_RANK)
 	{
+		for (int i = 0; i < 64; i++) mat[i] = -1;
 		Buzz_getBlock(bm, bm->proc_cnt, 0, 8, 0, 8, &mat[0], 8, 1, 0);
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
