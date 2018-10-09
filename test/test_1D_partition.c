@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 	// 4 * 1 proc grid, matrix size 9 * 8
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_DOUBLE, 8, my_rank, 9, 8,
-		4, 1, &r_displs[0], &c_displs[0], 2, 0
+		4, 1, &r_displs[0], &c_displs[0]
 	);
 
 	double d = 10.0 + (double) my_rank;

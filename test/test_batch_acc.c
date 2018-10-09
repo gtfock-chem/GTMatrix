@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 	// 4 * 4 proc grid, matrix size 8 * 8
 	Buzz_createBuzzMatrix(
 		&bm, comm_world, MPI_INT, 4, my_rank, 8, 8, 
-		4, 4, &r_displs[0], &c_displs[0], 2, 0
+		4, 4, &r_displs[0], &c_displs[0]
 	);
 	
 	int ifill = 0;
@@ -68,8 +68,6 @@ int main(int argc, char **argv)
 		Buzz_getBlock(bm, 0, 8, 0, 8, &mat[0], 8, 1);
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
-	
-	MPI_Barrier(MPI_COMM_WORLD);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	

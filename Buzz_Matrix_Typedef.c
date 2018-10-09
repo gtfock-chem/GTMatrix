@@ -11,8 +11,7 @@
 void Buzz_createBuzzMatrix(
 	Buzz_Matrix_t *Buzz_mat, MPI_Comm comm, MPI_Datatype datatype,
 	int unit_size, int my_rank, int nrows, int ncols,
-	int r_blocks, int c_blocks, int *r_displs, int *c_displs,
-	int nthreads, int buf_size
+	int r_blocks, int c_blocks, int *r_displs, int *c_displs
 )
 {
 	Buzz_Matrix_t bm = (Buzz_Matrix_t) malloc(sizeof(struct Buzz_Matrix));
@@ -23,7 +22,6 @@ void Buzz_createBuzzMatrix(
 	MPI_Comm_size(comm, &comm_size);
 	assert(my_rank < comm_size);
 	assert(r_blocks * c_blocks == comm_size);
-	assert(nthreads >= 1);
 	MPI_Comm_dup(comm, &bm->mpi_comm);
 	bm->datatype  = datatype;
 	bm->unit_size = unit_size;
@@ -99,14 +97,6 @@ void Buzz_createBuzzMatrix(
 	//MPI_Allgather(&bm->ld_local, 1, MPI_INT, bm->ld_blks, 1, MPI_INT, bm->mpi_comm);
 	MPI_Info_free(&mpi_info);
 	
-	// Allocate space for receive buffer
-	if (buf_size <= 0) buf_size = DEFAULE_RCV_BUF_SIZE;
-	bm->rcvbuf_size  = buf_size;
-	bm->recv_buff = (void*) malloc(nthreads * bm->rcvbuf_size);
-	bm->proc_cnt  = (int*)  malloc(sizeof(int) * nthreads * bm->comm_size);
-	assert(bm->recv_buff != NULL && bm->proc_cnt != NULL);
-	memset(bm->proc_cnt, 0, sizeof(int) * comm_size * nthreads);
-	
 	// Define small block data types
 	bm->sb_stride   = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
 	bm->sb_nostride = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
@@ -160,8 +150,6 @@ void Buzz_destroyBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	free(bm->c_blklens);
 	free(bm->mat_block);
 	//free(bm->ld_blks);
-	free(bm->recv_buff);
-	free(bm->proc_cnt);
 	free(bm->symm_buf);
 	
 	for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
