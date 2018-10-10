@@ -194,7 +194,6 @@ void Buzz_startBatchGet(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 	if (bm->is_batch_updating) return;
 	
-	MPI_Win_lock_all(0, bm->mpi_win);
 	for (int i = 0; i < bm->comm_size; i++)
 		Buzz_resetReqVector(bm->req_vec[i]);
 	bm->is_batch_getting = 1;
@@ -212,6 +211,7 @@ void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
 		
 		if (req_vec->curr_size > 0)
 		{
+			MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, bm->mpi_win);
 			for (int i = 0; i < req_vec->curr_size; i++)
 			{
 				//MPI_Op op      = req_vec->ops[i];
@@ -226,6 +226,7 @@ void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat)
 					blk_c_s, blk_c_num, blk_ptr, src_buf_ld, 1
 				);
 			}
+			MPI_Win_unlock(dst_rank, bm->mpi_win);
 		}
 		
 		Buzz_resetReqVector(req_vec);
@@ -237,6 +238,5 @@ void Buzz_stopBatchGet(Buzz_Matrix_t Buzz_mat)
 	Buzz_Matrix_t bm = Buzz_mat;
 	if (bm->is_batch_getting == 0) return;
 	
-	MPI_Win_unlock_all(bm->mpi_win);
 	bm->is_batch_getting = 0;
 }

@@ -8,18 +8,20 @@
 #include "utils.h"
 
 #define ACTOR_RANK 4
+#define ACCU_RANK  10
 
 /*
 Run with: mpirun -np 16 ./test_batch_acc.x
 Correct output:
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120	
- 120	 120	 120	 120	 120	 120	 120	 120 
+Updated matrix:
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45	
+ 45	 45	 45	 45	 45	 45	 45	 45
 */
 
 int main(int argc, char **argv)
@@ -50,17 +52,18 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < 64; i++) mat[i] = my_rank;
 
-	Buzz_startBatchUpdate(bm);
-	// Bug: if not all processes calling the following loop and update to all 
-	// processes, dead lock happens
-	for (int irow = 0; irow < 8; irow++)
-		Buzz_addAccumulateBlockRequest(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
-	printf("Rank %d add requests done\n", my_rank);
-	Buzz_execBatchUpdate(bm);
-	Buzz_stopBatchUpdate(bm);
+	if (my_rank < ACCU_RANK)
+	{
+		Buzz_startBatchUpdate(bm);
+		for (int irow = 0; irow < 8; irow++)
+			Buzz_addAccumulateBlockRequest(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
+		printf("Rank %d add requests done\n", my_rank);
+		Buzz_execBatchUpdate(bm);
+		Buzz_stopBatchUpdate(bm);
+	}
 	
 	// Wait all process to finish their update
-	MPI_Barrier(MPI_COMM_WORLD);
+	Buzz_Sync(bm);
 
 	if (my_rank == ACTOR_RANK)
 	{
@@ -69,10 +72,7 @@ int main(int argc, char **argv)
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
 	
-	// Bug: we should use a MPI_Barrier below to prevent some processes
-	// destroy the Buzz Matrix earlier than the Buzz_getBlock. But adding 
-	// them will also lead to dead lock
-	//MPI_Barrier(MPI_COMM_WORLD);
+	Buzz_Sync(bm);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	
