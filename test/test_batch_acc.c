@@ -51,11 +51,11 @@ int main(int argc, char **argv)
 	for (int i = 0; i < 64; i++) mat[i] = my_rank;
 
 	Buzz_startBatchUpdate(bm);
-	
+	// Bug: if not all processes calling the following loop and update to all 
+	// processes, dead lock happens
 	for (int irow = 0; irow < 8; irow++)
 		Buzz_addAccumulateBlockRequest(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
 	printf("Rank %d add requests done\n", my_rank);
-	
 	Buzz_execBatchUpdate(bm);
 	Buzz_stopBatchUpdate(bm);
 	
@@ -68,6 +68,11 @@ int main(int argc, char **argv)
 		Buzz_getBlock(bm, 0, 8, 0, 8, &mat[0], 8, 1);
 		print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
 	}
+	
+	// Bug: we should use a MPI_Barrier below to prevent some processes
+	// destroy the Buzz Matrix earlier than the Buzz_getBlock. But adding 
+	// them will also lead to dead lock
+	//MPI_Barrier(MPI_COMM_WORLD);
 	
 	Buzz_destroyBuzzMatrix(bm);
 	
