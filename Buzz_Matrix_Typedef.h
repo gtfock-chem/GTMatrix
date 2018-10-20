@@ -8,8 +8,8 @@
 struct Buzz_Matrix
 {
 	// MPI components
-	MPI_Comm mpi_comm;           // Target communicator
-	MPI_Win  mpi_win;            // MPI window for distribute matrix
+	MPI_Comm mpi_comm, shm_comm; // Target communicator
+	MPI_Win  mpi_win,  shm_win;  // MPI window for distribute matrix
 	MPI_Datatype datatype;       // Matrix data type
 	
 	// Matrix size and partition
@@ -30,6 +30,11 @@ struct Buzz_Matrix
 	Buzz_Req_Vector_t *req_vec;  // Update requests for each process
 	int is_batch_updating;       // If we can submit update request
 	int is_batch_getting;        // If we can submit get request
+	
+	// MPI Shared memory window
+	int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator
+	int *shm_global_ranks;       // Global ranks (in mpi_comm) of the processes in shm_comm
+	void **shm_mat_blocks;       // Arrays of all shared memory ranks' pointers
 	
 	// Predefined small block data types
 	MPI_Datatype *sb_stride;     // Data type for stride != columns 
