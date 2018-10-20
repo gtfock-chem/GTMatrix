@@ -6,6 +6,24 @@
 
 #include "Buzz_Matrix_Typedef.h"
 #include "Buzz_Matrix_Get.h"
+#include "Buzz_Matrix_Other.h"
+
+void Buzz_Sync(Buzz_Matrix_t Buzz_mat)
+{
+	if (SYNC_IBARRIER == 1)
+	{
+		// Observed that on some Skylake & KNL machine with IMPI 17, when not all
+		// MPI processes have RMA calls, a MPI_Barrier will lead to deadlock when 
+		// running more than 16 MPI processes on the same node. Don't know why using  
+		// a MPI_Ibarrier + MPI_Ibarrier can solve this problem...
+		MPI_Status  status;
+		MPI_Request req;
+		MPI_Ibarrier(Buzz_mat->mpi_comm, &req);
+		MPI_Wait(&req, &status);
+	} else {
+		MPI_Barrier(Buzz_mat->mpi_comm);
+	}
+}
 
 void Buzz_fillBuzzMatrix(Buzz_Matrix_t Buzz_mat, void *value)
 {
@@ -42,19 +60,21 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 	// This process holds [rs:re, cs:ce], need to fetch [cs:ce, rs:re]
 	void *rcv_buf = bm->symm_buf;
 
-	Buzz_startBuzzMatrixReadOnlyEpoch(bm);
 	int my_row_start = bm->r_displs[bm->my_rowblk];
 	int my_col_start = bm->c_displs[bm->my_colblk];
-	Buzz_startBatchGet(bm);
-    Buzz_addGetBlockRequest(
+	
+	Buzz_Sync(bm);
+	
+	Buzz_getBlock(
 		bm, 
 		my_col_start, bm->my_ncols, 
 		my_row_start, bm->my_nrows, 
-		rcv_buf, bm->my_nrows
+		rcv_buf, bm->my_nrows, 1
 	);
-	Buzz_execBatchGet(bm);
-	Buzz_stopBatchGet(bm);
-	Buzz_stopBuzzMatrixReadOnlyEpoch(bm);
+	
+	// Wait all processes to get the symmetric block before modifying
+	// local block, or some processes will get the modified block
+	Buzz_Sync(bm);
 	
 	if (MPI_INT == bm->datatype)
 	{
@@ -86,5 +106,6 @@ void Buzz_symmetrizeBuzzMatrix(Buzz_Matrix_t Buzz_mat)
 			}
 		}
 	}
-	MPI_Barrier(bm->mpi_comm);
+	
+	Buzz_Sync(bm);
 }

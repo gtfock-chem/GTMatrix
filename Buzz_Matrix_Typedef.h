@@ -26,10 +26,6 @@ struct Buzz_Matrix
 	int unit_size;               // Size of matrix data type, unit is byte
 	int my_rank, comm_size;      // Rank of this process and number of process in the global communicator
 	void *mat_block;             // Local matrix block
-	void *recv_buff;             // Receive buffer for Buzz_getBlockList()
-	int rcvbuf_size;             // Size of recv_buff, unit is byte
-	int *proc_cnt;               // Array for counting how many MPI_Get requests 
-	int nthreads;                // Maximum number of thread that calls getBlock
 	void *symm_buf;              // Buffer for symmetrization
 	Buzz_Req_Vector_t *req_vec;  // Update requests for each process
 	int is_batch_updating;       // If we can submit update request
@@ -64,13 +60,10 @@ typedef struct Buzz_Matrix* Buzz_Matrix_t;
 // [in]  c_blocks   : Number of blocks on column direction
 // [in]  *r_displs  : Row direction displacement array, nrows+1 elements
 // [in]  *c_displs  : Column direction displacement array, ncols+1 elements
-// [in]  nthreads   : Maximum number of thread that calls getBlock
-// [in]  buf_size   : Receive buffer size (bytes) of each thread, <= 0 will use default value (256KB)
 void Buzz_createBuzzMatrix(
 	Buzz_Matrix_t *Buzz_mat, MPI_Comm comm, MPI_Datatype datatype,
 	int unit_size, int my_rank, int nrows, int ncols,
-	int r_blocks, int c_blocks, int *r_displs, int *c_displs,
-	int nthreads, int buf_size
+	int r_blocks, int c_blocks, int *r_displs, int *c_displs
 );
 
 // Free a Buzz_Matrix structure

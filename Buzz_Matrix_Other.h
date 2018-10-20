@@ -3,6 +3,11 @@
 
 #include "Buzz_Matrix_Typedef.h"
 
+#define SYNC_IBARRIER 1
+
+// Synchronize all processes
+void Buzz_Sync(Buzz_Matrix_t Buzz_mat);
+
 // Fill the Buzz_Matrix with a single value
 // This call is collective, not thread-safe
 // [in] *value : Pointer to the value of appropriate type that matches
