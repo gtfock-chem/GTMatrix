@@ -1,6 +1,10 @@
 #ifndef __HUANGH223_UTILS_H__
 #define __HUANGH223_UTILS_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Helper functions
 
 #define ALIGN64B_MALLOC(x) _mm_malloc((x), 64)
@@ -40,5 +44,9 @@ void getRectIntersection(
 
 // Get the (first) index of an integer element in an array, returning -1 means no such element
 int getElementIndexInArray(const int elem, const int *array, const int array_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

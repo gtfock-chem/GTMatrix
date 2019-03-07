@@ -16,11 +16,11 @@
 // [in]  dst_locked : If the target rank has been locked with MPI_Win_lock, = 0 will 
 //                    use MPI_Win_lock & MPI_Win_unlock and the function is blocking
 void Buzz_getBlockFromProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank, 
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld,
-	int dst_locked
+    Buzz_Matrix_t Buzz_mat, int dst_rank, 
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld,
+    int dst_locked
 );
 
 // Get a block from all related processes using MPI_Get
@@ -36,21 +36,21 @@ void Buzz_getBlockFromProcess(
 //                    finished later with Buzz_execBatchUpdate(); otherwise the update 
 //                    is finished when this function returns
 void Buzz_getBlock(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, 
-	int blocking
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld, 
+    int blocking
 );
 
 // Add a get to put a block to all related processes using 
 // Buzz_getBlock(), non-blocking operation
 // This call is not collective, not thread-safe
 void Buzz_addGetBlockRequest(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld
 );
 
 // Start a batch get epoch and allow to submit update requests

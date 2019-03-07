@@ -1,7 +1,11 @@
 # Buzz Matrix
-Copyright (c) 2018 Georgia Institute of Technology
+Copyright (c) 2018-2019 Edmond Group at Georgia Tech
 
-Buzz Matrix is yet another tiny PGAS (partitioned global address space) framework. Its original purpose is to replace [Global Arrays](http://hpc.pnl.gov/globalarrays/) in [GTFock](https://github.com/gtfock-chem/gtfock). It is written in C and uses only MPI. 
+Authors:
+Hua Huang ([huangh223@gatch.edu](mailto:huangh223@gatch.edu))
+Edmond Chow ([echow@cc.gatech.edu](mailto:echow@cc.gatech.edu))
+
+Buzz Matrix is yet another tiny PGAS (partitioned global address space) framework. Its original purpose is to replace [Global Arrays](http://hpc.pnl.gov/globalarrays/) in [GTFock](https://github.com/gtfock-chem/gtfock). It is written in C + MPI-3 and provides C/C++ interface.
 
 Supports:
 

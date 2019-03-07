@@ -20,31 +20,31 @@
 // [in] dst_locked : If the target rank has been locked with MPI_Win_lock, = 0 will 
 //                   use MPI_Win_lock & MPI_Win_unlock and the function is blocking
 void Buzz_updateBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, 
-	int dst_locked
+    Buzz_Matrix_t Buzz_mat, int dst_rank, MPI_Op op, 
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld, 
+    int dst_locked
 );
 
 // Put a block to a process using Buzz_updateBlockToProcess()
 // This function should not be directly called, use Buzz_putBlock() instead
 void Buzz_putBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, 
-	int dst_locked
+    Buzz_Matrix_t Buzz_mat, int dst_rank,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld, 
+    int dst_locked
 );
 
 // Accumulate a block to a process using Buzz_updateBlockToProcess()
 // This function should not be directly called, use Buzz_accumulateBlock() instead
 void Buzz_accumulateBlockToProcess(
-	Buzz_Matrix_t Buzz_mat, int dst_rank,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld, 
-	int dst_locked
+    Buzz_Matrix_t Buzz_mat, int dst_rank,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld, 
+    int dst_locked
 );
 
 // Update (put or accumulate) a block to all related processes using MPI_Accumulate
@@ -60,49 +60,49 @@ void Buzz_accumulateBlockToProcess(
 //                   finished later with Buzz_execBatchUpdate(); otherwise the update 
 //                   is finished when this function returns
 void Buzz_updateBlock(
-	Buzz_Matrix_t Buzz_mat, MPI_Op op, 
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld,
-	int blocking
+    Buzz_Matrix_t Buzz_mat, MPI_Op op, 
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld,
+    int blocking
 );
 
 // Put a block to all related processes using Buzz_updateBlock(), blocking operation
 // This call is not collective, not thread-safe
 void Buzz_putBlock(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld
 );
 
 // Accumulate a block to all related processes using Buzz_updateBlock(), blocking operation
 // This call is not collective, not thread-safe
 void Buzz_accumulateBlock(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld
 );
 
 // Add a request to put a block to all related processes using 
 // Buzz_updateBlock(), non-blocking operation
 // This call is not collective, not thread-safe
 void Buzz_addPutBlockRequest(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld
 );
 
 // Add a request to accumulate a block to all related processes using 
 // Buzz_updateBlock(), non-blocking operation
 // This call is not collective, not thread-safe
 void Buzz_addAccumulateBlockRequest(
-	Buzz_Matrix_t Buzz_mat,
-	int row_start, int row_num,
-	int col_start, int col_num,
-	void *src_buf, int src_buf_ld
+    Buzz_Matrix_t Buzz_mat,
+    int row_start, int row_num,
+    int col_start, int col_num,
+    void *src_buf, int src_buf_ld
 );
 
 // Start a batch update epoch and allow to submit update requests

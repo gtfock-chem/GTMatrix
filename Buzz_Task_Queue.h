@@ -3,10 +3,10 @@
 
 struct Buzz_Task_Queue
 {
-	MPI_Comm mpi_comm;      // Target communicator
-	MPI_Win  mpi_win;       // MPI window for counter
-	int *task_counter;      // Task counter
-	int my_rank, comm_size; // Rank of this process and number of process in the global communicator
+    MPI_Comm mpi_comm;      // Target communicator
+    MPI_Win  mpi_win;       // MPI window for counter
+    int *task_counter;      // Task counter
+    int my_rank, comm_size; // Rank of this process and number of process in the global communicator
 };
 
 typedef struct Buzz_Task_Queue* Buzz_Task_Queue_t;

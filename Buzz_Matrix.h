@@ -1,6 +1,10 @@
 #ifndef __BUZZ_MATRIX_H__
 #define __BUZZ_MATRIX_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Buzz_Matrix structure definition, constructor and destructor 
 #include "Buzz_Matrix_Typedef.h"
 
@@ -12,5 +16,9 @@
 
 // Buzz_Matrix other operations: symmetrize, fill with value
 #include "Buzz_Matrix_Other.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
