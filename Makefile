@@ -1,32 +1,32 @@
-LIB     = libBuzzMatrix.a
+LIB     = libGTMatrix.a
 MPICC   = mpiicc
 CFLAGS  = -Wall -g -O3 -qopenmp -std=gnu99
 LDFLAGS = -qopenmp
 AR      = xiar rcs
 
-OBJS = Buzz_Matrix_Typedef.o Buzz_Req_Vector.o   Buzz_Matrix_Get.o  \
-       Buzz_Matrix_Update.o  Buzz_Matrix_Other.o Buzz_Task_Queue.o utils.o 
+OBJS = GTMatrix_Typedef.o GTMatrix_Get.o GTMatrix_Update.o      \
+       GTMatrix_Other.o GTM_Req_Vector.o GTM_Task_Queue.o utils.o 
 
 $(LIB): $(OBJS) 
 	${AR} $@ $^
 	
-Buzz_Matrix_Typedef.o: Makefile Buzz_Matrix_Typedef.h Buzz_Matrix_Typedef.c 
-	$(MPICC) ${CFLAGS} -c Buzz_Matrix_Typedef.c -o $@ 
+GTMatrix_Typedef.o: Makefile GTMatrix_Typedef.h GTMatrix_Typedef.c 
+	$(MPICC) ${CFLAGS} -c GTMatrix_Typedef.c -o $@ 
 	
-Buzz_Req_Vector.o: Makefile Buzz_Req_Vector.h Buzz_Req_Vector.c 
-	$(MPICC) ${CFLAGS} -c Buzz_Req_Vector.c -o $@ 
+GTM_Req_Vector.o: Makefile GTM_Req_Vector.h GTM_Req_Vector.c 
+	$(MPICC) ${CFLAGS} -c GTM_Req_Vector.c -o $@ 
 	
-Buzz_Matrix_Get.o: Makefile Buzz_Matrix_Typedef.h utils.h Buzz_Matrix_Get.c
-	$(MPICC) ${CFLAGS} -c Buzz_Matrix_Get.c -o $@ 
+GTMatrix_Get.o: Makefile GTMatrix_Typedef.h utils.h GTMatrix_Get.c
+	$(MPICC) ${CFLAGS} -c GTMatrix_Get.c -o $@ 
 
-Buzz_Matrix_Update.o: Makefile Buzz_Matrix_Typedef.h utils.h  Buzz_Matrix_Update.c
-	$(MPICC) ${CFLAGS} -c Buzz_Matrix_Update.c -o $@ 
+GTMatrix_Update.o: Makefile GTMatrix_Typedef.h utils.h  GTMatrix_Update.c
+	$(MPICC) ${CFLAGS} -c GTMatrix_Update.c -o $@ 
 
-Buzz_Matrix_Other.o: Makefile Buzz_Matrix_Typedef.h Buzz_Matrix_Get.h Buzz_Matrix_Other.c 
-	$(MPICC) ${CFLAGS} -c Buzz_Matrix_Other.c -o $@ 
+GTMatrix_Other.o: Makefile GTMatrix_Typedef.h GTMatrix_Get.h GTMatrix_Other.c 
+	$(MPICC) ${CFLAGS} -c GTMatrix_Other.c -o $@ 
 	
-Buzz_Task_Queue.o: Makefile Buzz_Task_Queue.h Buzz_Task_Queue.c
-	$(MPICC) ${CFLAGS} -c Buzz_Task_Queue.c -o $@ 
+GTM_Task_Queue.o: Makefile GTM_Task_Queue.h GTM_Task_Queue.c
+	$(MPICC) ${CFLAGS} -c GTM_Task_Queue.c -o $@ 
 
 utils.o: Makefile utils.c utils.h
 	$(MPICC) ${CFLAGS} -c utils.c -o $@ 

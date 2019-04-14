@@ -1,11 +1,11 @@
-#ifndef __BUZZ_MATRIX_GET_H__
-#define __BUZZ_MATRIX_GET_H__
+#ifndef __GTMATRIX_GET_H__
+#define __GTMATRIX_GET_H__
 
 #include <mpi.h>
-#include "Buzz_Matrix_Typedef.h"
+#include "GTMatrix_Typedef.h"
 
 // Get a block from a process using MPI_Get
-// This function should not be directly called, use Buzz_getBlock() instead
+// This function should not be directly called, use GTM_getBlock() instead
 // [in]  dst_rank   : Target process
 // [in]  row_start  : 1st row of the required block
 // [in]  row_num    : Number of rows the required block has
@@ -15,8 +15,8 @@
 // [in]  src_buf_ld : Leading dimension of the received buffer
 // [in]  dst_locked : If the target rank has been locked with MPI_Win_lock, = 0 will 
 //                    use MPI_Win_lock & MPI_Win_unlock and the function is blocking
-void Buzz_getBlockFromProcess(
-    Buzz_Matrix_t Buzz_mat, int dst_rank, 
+void GTM_getBlockFromProcess(
+    GTMatrix_t gt_mat, int dst_rank, 
     int row_start, int row_num,
     int col_start, int col_num,
     void *src_buf, int src_buf_ld,
@@ -33,21 +33,21 @@ void Buzz_getBlockFromProcess(
 // [out] *src_buf   : Receive buffer
 // [in]  src_buf_ld : Leading dimension of the received buffer
 // [in]  blocking   : If blocking = 0, the update request will be put in queues and 
-//                    finished later with Buzz_execBatchUpdate(); otherwise the update 
+//                    finished later with GTM_execBatchUpdate(); otherwise the update 
 //                    is finished when this function returns
-void Buzz_getBlock(
-    Buzz_Matrix_t Buzz_mat,
+void GTM_getBlock(
+    GTMatrix_t gt_mat,
     int row_start, int row_num,
     int col_start, int col_num,
     void *src_buf, int src_buf_ld, 
     int blocking
 );
 
-// Add a get to put a block to all related processes using 
-// Buzz_getBlock(), non-blocking operation
+// Add a request to get a block to all related processes using 
+// GTM_getBlock(), non-blocking operation
 // This call is not collective, not thread-safe
-void Buzz_addGetBlockRequest(
-    Buzz_Matrix_t Buzz_mat,
+void GTM_addGetBlockRequest(
+    GTMatrix_t gt_mat,
     int row_start, int row_num,
     int col_start, int col_num,
     void *src_buf, int src_buf_ld
@@ -55,15 +55,15 @@ void Buzz_addGetBlockRequest(
 
 // Start a batch get epoch and allow to submit update requests
 // This call is not collective, not thread-safe
-void Buzz_startBatchGet(Buzz_Matrix_t Buzz_mat);
+void GTM_startBatchGet(GTMatrix_t gt_mat);
 
 // Execute all get requests in the queues
 // This call is not collective, not thread-safe
-void Buzz_execBatchGet(Buzz_Matrix_t Buzz_mat);
+void GTM_execBatchGet(GTMatrix_t gt_mat);
 
-// Stop a batch get epoch and disallow to submit update requests
+// Stop a batch get epoch and allow to submit update requests
 // This call is not collective, not thread-safe
-void Buzz_stopBatchGet(Buzz_Matrix_t Buzz_mat);
+void GTM_stopBatchGet(GTMatrix_t gt_mat);
 
 
 #endif

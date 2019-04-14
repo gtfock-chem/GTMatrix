@@ -1,4 +1,4 @@
-LIB     = ../libBuzzMatrix.a
+LIB     = ../libGTMatrix.a
 MPICC   = mpiicc
 CFLAGS  = -Wall -g -O3 -qopenmp -std=gnu99
 LDFLAGS = -qopenmp

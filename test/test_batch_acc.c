@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include <omp.h>
 
-#include "Buzz_Matrix.h"
+#include "GTMatrix.h"
 #include "utils.h"
 
 #define ACTOR_RANK 4
@@ -39,47 +39,47 @@ int main(int argc, char **argv)
     MPI_Comm comm_world;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_world);
     
-    Buzz_Matrix_t bm;
+    GTMatrix_t gt_mat;
     
     // 4 * 4 proc grid, matrix size 8 * 8
-    Buzz_createBuzzMatrix(
-        &bm, comm_world, MPI_INT, 4, my_rank, 8, 8, 
+    GTM_createGTMatrix(
+        &gt_mat, comm_world, MPI_INT, 4, my_rank, 8, 8, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     int ifill = 0;
-    Buzz_fillBuzzMatrix(bm, &ifill);
+    GTM_fillGTMatrix(gt_mat, &ifill);
 
     for (int i = 0; i < 64; i++) mat[i] = my_rank;
 
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
 
     if (my_rank < ACCU_RANK)
     {
-        Buzz_startBatchUpdate(bm);
+        GTM_startBatchUpdate(gt_mat);
         for (int irow = 0; irow < 8; irow++)
-            Buzz_addAccumulateBlockRequest(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
+            GTM_addAccumulateBlockRequest(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
         printf("Rank %d add requests done\n", my_rank);
-        Buzz_execBatchUpdate(bm);
-        Buzz_stopBatchUpdate(bm);
+        GTM_execBatchUpdate(gt_mat);
+        GTM_stopBatchUpdate(gt_mat);
         
         //for (int irow = 0; irow < 8; irow++)
-        //    Buzz_accumulateBlock(bm, irow, 1, 0, 8, &mat[irow * 8], 8);
+        //    GTM_accumulateBlock(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
     }
     
     // Wait all process to finish their update
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
 
     if (my_rank == ACTOR_RANK)
     {
         for (int i = 0; i < 64; i++) mat[i] = -1;
-        Buzz_getBlock(bm, 0, 8, 0, 8, &mat[0], 8, 1);
+        GTM_getBlock(gt_mat, 0, 8, 0, 8, &mat[0], 8, 1);
         print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
     }
     
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
     
-    Buzz_destroyBuzzMatrix(bm);
+    GTM_destroyGTMatrix(gt_mat);
     
     MPI_Finalize();
 }

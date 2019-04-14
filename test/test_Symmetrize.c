@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include <omp.h>
 
-#include "Buzz_Matrix.h"
+#include "GTMatrix.h"
 #include "utils.h"
 
 #define ACTOR_RANK 5
@@ -52,37 +52,39 @@ int main(int argc, char **argv)
     MPI_Comm comm_world;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_world);
     
-    Buzz_Matrix_t bm;
+    GTMatrix_t gt_mat;
     
     // 4 * 4 proc grid, matrix size 10 * 10
-    Buzz_createBuzzMatrix(
-        &bm, comm_world, MPI_DOUBLE, 8, my_rank, 10, 10, 
+    GTM_createGTMatrix(
+        &gt_mat, comm_world, MPI_DOUBLE, 8, my_rank, 10, 10, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     // Set local data
     double d_fill = (double) (my_rank + 10);
-    Buzz_fillBuzzMatrix(bm, &d_fill);
+    GTM_fillGTMatrix(gt_mat, &d_fill);
+    
+    GTM_Sync(gt_mat);
     
     if (my_rank == ACTOR_RANK)
     {
-        Buzz_getBlock(bm, 0, 10, 0, 10, &mat[0], 10, 1);
+        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10, 1);
         print_double_mat(&mat[0], 10, 10, 10, "Initial matrix");
     }
     
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
     
     // Symmetrizing
-    Buzz_symmetrizeBuzzMatrix(bm);
+    GTM_symmetrizeGTMatrix(gt_mat);
     if (my_rank == ACTOR_RANK)
     {
-        Buzz_getBlock(bm, 0, 10, 0, 10, &mat[0], 10, 1);
+        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10, 1);
         print_double_mat(&mat[0], 10, 10, 10, "Symmetrized matrix");
     }
     
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
     
-    Buzz_destroyBuzzMatrix(bm);
+    GTM_destroyGTMatrix(gt_mat);
     
     MPI_Finalize();
 }

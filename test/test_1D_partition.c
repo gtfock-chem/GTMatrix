@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include <omp.h>
 
-#include "Buzz_Matrix.h"
+#include "GTMatrix.h"
 #include "utils.h"
 
 #define ACTOR_RANK 3
@@ -54,26 +54,28 @@ int main(int argc, char **argv)
     MPI_Comm comm_world;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_world);
     
-    Buzz_Matrix_t bm;
+    GTMatrix_t gt_mat;
 
     // 16 * 1 proc grid, matrix size 24 * 4
-    Buzz_createBuzzMatrix(
-        &bm, comm_world, MPI_DOUBLE, 8, my_rank, 24, 4,
+    GTM_createGTMatrix(
+        &gt_mat, comm_world, MPI_DOUBLE, 8, my_rank, 24, 4,
         16, 1, &r_displs[0], &c_displs[0]
     );
 
     double d = 10.0 + (double) my_rank;
-    Buzz_fillBuzzMatrix(bm, &d);
+    GTM_fillGTMatrix(gt_mat, &d);
+    
+    GTM_Sync(gt_mat);
 
     if (my_rank == ACTOR_RANK)
     {
-        Buzz_getBlock(bm, 0, 24, 0, 4, &mat[0], 4, 1);
+        GTM_getBlock(gt_mat, 0, 24, 0, 4, &mat[0], 4, 1);
         print_double_mat(&mat[0], 4, 24, 4, "Recv matrix");
     }
 
-    Buzz_Sync(bm);
+    GTM_Sync(gt_mat);
     
-    Buzz_destroyBuzzMatrix(bm);
+    GTM_destroyGTMatrix(gt_mat);
 
     MPI_Finalize();
 }

@@ -1,7 +1,7 @@
-#ifndef __BUZZ_TASK_QUEUE_H__
-#define __BUZZ_TASK_QUEUE_H__
+#ifndef __GTM_TASK_QUEUE_H__
+#define __GTM_TASK_QUEUE_H__
 
-struct Buzz_Task_Queue
+struct GTM_Task_Queue
 {
     MPI_Comm mpi_comm;      // Target communicator
     MPI_Win  mpi_win;       // MPI window for counter
@@ -9,26 +9,26 @@ struct Buzz_Task_Queue
     int my_rank, comm_size; // Rank of this process and number of process in the global communicator
 };
 
-typedef struct Buzz_Task_Queue* Buzz_Task_Queue_t;
+typedef struct GTM_Task_Queue* GTM_Task_Queue_t;
 
-// Create and initialize a Buzz_Task_Queue structure
+// Create and initialize a GTM_Task_Queue structure
 // This call is collective, thread-safe
 // [in] comm : MPI communicator used in this distributed task queue
-void Buzz_createBuzzTaskQueue(Buzz_Task_Queue_t *_btq, MPI_Comm comm);
+void GTM_createGTMTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm);
 
-// Free a Buzz_Task_Queue structure
+// Free a GTM_Task_Queue structure
 // This call is collective, thread-safe
-void Buzz_destroyBuzzTaskQueue(Buzz_Task_Queue_t btq);
+void GTM_destroyGTMTaskQueue(GTM_Task_Queue_t gtm_tq);
 
-// Free counter in a Buzz_Task_Queue structure
+// Free counter in a GTM_Task_Queue structure
 // This call is collective, thread-safe
-void Buzz_resetBuzzTaskQueue(Buzz_Task_Queue_t btq);
+void GTM_resetGTMTaskQueue(GTM_Task_Queue_t gtm_tq);
 
 // Read and then increment the task_counter value on the given process
 // This call is not collective, thread-safe
 // [in] dst_rank : Target process rank
 // [in] ntasks   : Number of tasks to get
 // [out ]@return : The task_counter value before incremention
-int Buzz_getNextTasks(Buzz_Task_Queue_t btq, int dst_rank, int ntasks);
+int GTM_getNextTasks(GTM_Task_Queue_t gtm_tq, int dst_rank, int ntasks);
 
 #endif
