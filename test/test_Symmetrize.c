@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     
     if (my_rank == ACTOR_RANK)
     {
-        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10, 1);
+        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10);
         print_double_mat(&mat[0], 10, 10, 10, "Initial matrix");
     }
     
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     GTM_symmetrizeGTMatrix(gt_mat);
     if (my_rank == ACTOR_RANK)
     {
-        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10, 1);
+        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10);
         print_double_mat(&mat[0], 10, 10, 10, "Symmetrized matrix");
     }
     

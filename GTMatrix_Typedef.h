@@ -45,6 +45,10 @@ typedef struct GTMatrix* GTMatrix_t;
 
 #define MPI_DT_SB_DIM_MAX    16
 
+#define BLOCKING_ACCESS      0  // The access operation is finished when function returns
+#define NONBLOCKING_ACCESS   1  // The access operation is posted but not finished when function returns
+#define BATCH_ACCESS         2  // The access operation is pushed to the request queue but not posted
+
 // Create and initialize a GTMatrix structure
 // Each process has one matrix block, process ranks are arranged in row-major style
 // This call is collective, thread-safe

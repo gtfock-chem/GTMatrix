@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 
     if (my_rank == ACTOR_RANK)
     {
-        GTM_getBlock(gt_mat, 0, 24, 0, 4, &mat[0], 4, 1);
+        GTM_getBlock(gt_mat, 0, 24, 0, 4, &mat[0], 4);
         print_double_mat(&mat[0], 4, 24, 4, "Recv matrix");
     }
 

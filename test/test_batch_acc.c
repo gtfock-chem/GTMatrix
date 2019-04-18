@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     if (my_rank == ACTOR_RANK)
     {
         for (int i = 0; i < 64; i++) mat[i] = -1;
-        GTM_getBlock(gt_mat, 0, 8, 0, 8, &mat[0], 8, 1);
+        GTM_getBlock(gt_mat, 0, 8, 0, 8, &mat[0], 8);
         print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
     }
     
