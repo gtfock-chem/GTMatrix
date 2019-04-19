@@ -66,7 +66,7 @@ void GTM_symmetrizeGTMatrix(GTMatrix_t gt_mat)
         gt_mat, 
         my_col_start, gt_mat->my_ncols, 
         my_row_start, gt_mat->my_nrows, 
-        rcv_buf, gt_mat->my_nrows, 1
+        rcv_buf, gt_mat->my_nrows
     );
     
     // Wait all processes to get the symmetric block before modifying

@@ -6,6 +6,12 @@
 
 #include "GTM_Task_Queue.h"
 
+/*
+Run with: mpirun -np 16 ./test_task_queue.x
+Correct output:
+All proc tasks sum = 1279200, expected value = 1279200
+*/
+
 int main(int argc, char **argv)
 {
     int nprocs, my_rank;
