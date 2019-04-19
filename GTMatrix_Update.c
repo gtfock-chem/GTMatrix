@@ -9,12 +9,13 @@
 
 // Update (put or accumulate) a block to a process using MPI_Accumulate
 // The update operation is not complete when this function returns
+// [in] gt_mat     : GTMatrix handle
 // [in] dst_rank   : Target process
 // [in] op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
-// [in] row_start  : 1st row of the required block
-// [in] row_num    : Number of rows the required block has
-// [in] col_start  : 1st column of the required block
-// [in] col_num    : Number of columns the required block has
+// [in] row_start  : 1st row of the source block
+// [in] row_num    : Number of rows the source block has
+// [in] col_start  : 1st column of the source block
+// [in] col_num    : Number of columns the source block has
 // [in] *src_buf   : Source buffer
 // [in] src_buf_ld : Leading dimension of the source buffer
 void GTM_updateBlockToProcess(
@@ -84,11 +85,12 @@ void GTM_updateBlockToProcess(
 
 // Update (put or accumulate) a block to all related processes using MPI_Accumulate
 // This call is not collective, not thread-safe
+// [in] gt_mat      : GTMatrix handle
 // [in] op          : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
-// [in] row_start   : 1st row of the required block
-// [in] row_num     : Number of rows the required block has
-// [in] col_start   : 1st column of the required block
-// [in] col_num     : Number of columns the required block has
+// [in] row_start   : 1st row of the source block
+// [in] row_num     : Number of rows the source block has
+// [in] col_start   : 1st column of the source block
+// [in] col_num     : Number of columns the source block has
 // [in] *src_buf    : Source buffer
 // [in] src_buf_ld  : Leading dimension of the source buffer
 // [in] access_mode : Access mode, see GTMatrix_Typedef.h
@@ -171,12 +173,7 @@ void GTM_updateBlock(
 }
 
 // Put a block to the global matrix
-void GTM_putBlock(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_putBlock(GTM_PARAM)
 {
     GTM_updateBlock(
         gt_mat, MPI_REPLACE, 
@@ -187,12 +184,7 @@ void GTM_putBlock(
 }
 
 // Accumulate a block to the global matrix
-void GTM_accumulateBlock(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_accumulateBlock(GTM_PARAM)
 {
     GTM_updateBlock(
         gt_mat, MPI_SUM, 
@@ -203,12 +195,7 @@ void GTM_accumulateBlock(
 }
 
 // Add a request to put a block to the global matrix
-void GTM_addPutBlockRequest(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_addPutBlockRequest(GTM_PARAM)
 {
     GTM_updateBlock(
         gt_mat, MPI_REPLACE, 
@@ -219,12 +206,7 @@ void GTM_addPutBlockRequest(
 }
 
 // Add a request to accumulate a block to the global matrix
-void GTM_addAccumulateBlockRequest(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_addAccumulateBlockRequest(GTM_PARAM)
 {
     GTM_updateBlock(
         gt_mat, MPI_SUM, 

@@ -9,6 +9,7 @@
 
 // Post the operation of getting a blocking from a process using MPI_Get
 // The get operation is not complete when this function returns
+// [in]  gt_mat     : GTMatrix handle
 // [in]  dst_rank   : Target process
 // [in]  row_start  : 1st row of the required block
 // [in]  row_num    : Number of rows the required block has
@@ -103,6 +104,7 @@ void GTM_getBlockFromProcess(
 // Get a block from all related processes using MPI_Get
 // Non-blocking, data may not be ready before synchronization
 // This call is not collective, thread-safe
+// [in]  gt_mat      : GTMatrix handle
 // [in]  row_start   : 1st row of the required block
 // [in]  row_num     : Number of rows the required block has
 // [in]  col_start   : 1st column of the required block
@@ -110,13 +112,7 @@ void GTM_getBlockFromProcess(
 // [out] *src_buf    : Receive buffer
 // [in]  src_buf_ld  : Leading dimension of the received buffer
 // [in]  access_mode : Access mode, see GTMatrix_Typedef.h
-void GTM_getBlock_(
-    GTMatrix_t gt_mat, 
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld, 
-    int access_mode
-)
+void GTM_getBlock_(GTM_PARAM, int access_mode)
 {
     // Sanity check
     if ((row_start < 0) || (col_start < 0) ||
@@ -189,12 +185,7 @@ void GTM_getBlock_(
 }
 
 // Get a block from the global matrix
-void GTM_getBlock(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_getBlock(GTM_PARAM)
 {
     GTM_getBlock_(
         gt_mat,
@@ -205,12 +196,7 @@ void GTM_getBlock(
 }
 
 // Add a request to get a block from the global matrix
-void GTM_addGetBlockRequest(
-    GTMatrix_t gt_mat,
-    int row_start, int row_num,
-    int col_start, int col_num,
-    void *src_buf, int src_buf_ld
-)
+void GTM_addGetBlockRequest(GTM_PARAM)
 {
     GTM_getBlock_(
         gt_mat,
