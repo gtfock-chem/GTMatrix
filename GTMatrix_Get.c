@@ -162,19 +162,20 @@ void GTM_getBlock_(GTM_PARAM, int access_mode)
             int col_dist  = blk_c_s - col_start;
             char *blk_ptr = (char*) src_buf;
             blk_ptr += (row_dist * src_buf_ld + col_dist) * gt_mat->unit_size;
-            GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
             
             if (access_mode == BLOCKING_ACCESS)
             {
+                MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
                 GTM_getBlockFromProcess(
                     gt_mat, dst_rank, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
-                MPI_Win_flush(dst_rank, gt_mat->mpi_win);
+                MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
             }
             
             if (access_mode == BATCH_ACCESS)
             {
+                GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
                 GTM_pushToReqVector(
                     req_vec, MPI_NO_OP, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
@@ -228,6 +229,7 @@ void GTM_execBatchGet(GTMatrix_t gt_mat)
         
         if (req_vec->curr_size > 0)
         {
+            MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
             for (int i = 0; i < req_vec->curr_size; i++)
             {
                 int blk_r_s    = req_vec->row_starts[i];
@@ -241,7 +243,7 @@ void GTM_execBatchGet(GTMatrix_t gt_mat)
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
             }
-            MPI_Win_flush(dst_rank, gt_mat->mpi_win);
+            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
         }
         
         GTM_resetReqVector(req_vec);

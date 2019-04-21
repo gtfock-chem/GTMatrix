@@ -158,12 +158,6 @@ void GTM_createGTMatrix(
     gt_mat->req_vec = (GTM_Req_Vector_t*) malloc(gt_mat->comm_size * sizeof(GTM_Req_Vector_t));
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_createReqVector(&gt_mat->req_vec[i]);
-
-    // Lock all MPI processes once, unlock when destroying this GTMatrix structure
-    // We only need to guarantee element-wise atomicity for put and accumulate
-    // instead of atomicity of each put or accumulate operation. MPI_Win_lock_all
-    // is equal to MPI_Win_lock with MPI_LOCK_SHARED, that's enough. 
-    MPI_Win_lock_all(0, gt_mat->mpi_win);
     
     *_gt_mat = gt_mat;
 }
@@ -171,8 +165,6 @@ void GTM_createGTMatrix(
 void GTM_destroyGTMatrix(GTMatrix_t gt_mat)
 {
     assert(gt_mat != NULL);
-    
-    MPI_Win_unlock_all(gt_mat->mpi_win);
     
     MPI_Win_free(&gt_mat->mpi_win);
     MPI_Win_free(&gt_mat->shm_win);        // This will also free *mat_block
