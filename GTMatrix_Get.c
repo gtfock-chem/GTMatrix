@@ -173,6 +173,22 @@ void GTM_getBlock_(GTM_PARAM, int access_mode)
                 MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
             }
             
+            if (access_mode == NONBLOCKING_ACCESS)
+            {
+                if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
+                    MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                
+                GTM_getBlockFromProcess(
+                    gt_mat, dst_rank, blk_r_s, blk_r_num, 
+                    blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+                );
+                
+                gt_mat->nb_op_proc_cnt[dst_rank]++;
+                gt_mat->nb_op_cnt++;
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_op)
+                    GTM_completeNBAccess(gt_mat);
+            }
+            
             if (access_mode == BATCH_ACCESS)
             {
                 GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
@@ -193,6 +209,17 @@ void GTM_getBlock(GTM_PARAM)
         row_start, row_num,
         col_start, col_num,
         src_buf, src_buf_ld, BLOCKING_ACCESS
+    );
+}
+
+// Nonblocking get a block from the global matrix
+void GTM_getBlockNB(GTM_PARAM)
+{
+    GTM_getBlock_(
+        gt_mat,
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
     );
 }
 

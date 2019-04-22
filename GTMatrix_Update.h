@@ -17,6 +17,16 @@ void GTM_putBlock(GTM_PARAM);
 // This call is not collective, not thread-safe
 void GTM_accumulateBlock(GTM_PARAM);
 
+// Nonblocking put a block to the global matrix
+// Nonblocking call, the access operation is posted but not finished
+// This call is not collective, not thread-safe
+void GTM_putBlockNB(GTM_PARAM);
+
+// Nonblocking accumulate a block to the global matrix
+// Nonblocking call, the access operation is fposted but not finished
+// This call is not collective, not thread-safe
+void GTM_accumulateBlockNB(GTM_PARAM);
+
 // Add a request to put a block to the global matrix
 // Nonblocking call, the access operation is pushed to the request queue but not posted
 // This call is not collective, not thread-safe

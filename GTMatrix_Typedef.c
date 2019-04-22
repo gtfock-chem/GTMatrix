@@ -159,6 +159,17 @@ void GTM_createGTMatrix(
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_createReqVector(&gt_mat->req_vec[i]);
     
+    gt_mat->nb_op_proc_cnt = (int*) malloc(gt_mat->comm_size * sizeof(int));
+    assert(gt_mat->nb_op_proc_cnt != NULL);
+    memset(gt_mat->nb_op_proc_cnt, 0, gt_mat->comm_size * sizeof(int));
+    gt_mat->nb_op_cnt = 0;
+    gt_mat->max_nb_op = 128;
+    
+    char *max_nb_op_p = getenv("GTM_MAX_NB_OPS");
+    if (max_nb_op_p != NULL) gt_mat->max_nb_op = atoi(max_nb_op_p);
+    if (gt_mat->max_nb_op <  128) gt_mat->max_nb_op =  128;
+    if (gt_mat->max_nb_op > 1024) gt_mat->max_nb_op = 1024;
+    
     *_gt_mat = gt_mat;
 }
 
@@ -178,6 +189,16 @@ void GTM_destroyGTMatrix(GTMatrix_t gt_mat)
     //free(gt_mat->mat_block);
     //free(gt_mat->ld_blks);
     free(gt_mat->symm_buf);
+    
+    for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
+    {
+        if (gt_mat->nb_op_proc_cnt[dst_rank] != 0)
+        {
+            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+            gt_mat->nb_op_proc_cnt[dst_rank] = 0;
+        }
+    }
+    free(gt_mat->nb_op_proc_cnt);
     
     for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
     {

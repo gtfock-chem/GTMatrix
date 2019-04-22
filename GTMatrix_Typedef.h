@@ -30,6 +30,9 @@ struct GTMatrix
     GTM_Req_Vector_t *req_vec;   // Update requests for each process
     int is_batch_updating;       // If we can submit update request
     int is_batch_getting;        // If we can submit get request
+    int *nb_op_proc_cnt;         // Number of outstanding RMA operations on each process from nonblocking calls
+    int nb_op_cnt;               // Total number of outstanding RMA operations from nonblocking calls
+    int max_nb_op;               // Maximum number of outstanding RMA operations from nonblocking calls
     
     // MPI Shared memory window
     int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator

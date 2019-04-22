@@ -165,6 +165,22 @@ void GTM_updateBlock(
                 MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
             }
             
+            if (access_mode == NONBLOCKING_ACCESS)
+            {
+                if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
+                    MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                
+                GTM_updateBlockToProcess(
+                    gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
+                    blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+                );
+                
+                gt_mat->nb_op_proc_cnt[dst_rank]++;
+                gt_mat->nb_op_cnt++;
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_op)
+                    GTM_completeNBAccess(gt_mat);
+            }
+            
             if (access_mode == BATCH_ACCESS)
             {
                 GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
@@ -196,6 +212,28 @@ void GTM_accumulateBlock(GTM_PARAM)
         row_start, row_num,
         col_start, col_num,
         src_buf, src_buf_ld, BLOCKING_ACCESS
+    );
+}
+
+// Nonblocking put a block to the global matrix
+void GTM_putBlockNB(GTM_PARAM)
+{
+    GTM_updateBlock(
+        gt_mat, MPI_REPLACE, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
+    );
+}
+
+// Accumulate a block to the global matrix
+void GTM_accumulateBlockNB(GTM_PARAM)
+{
+    GTM_updateBlock(
+        gt_mat, MPI_SUM, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
     );
 }
 

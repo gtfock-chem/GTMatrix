@@ -9,6 +9,11 @@
 // This call is not collective, not thread-safe
 void GTM_getBlock(GTM_PARAM);
 
+// Nonblocking get a block from the global matrix
+// Nonblocking call, the access operation is posted but not finished
+// This call is not collective, not thread-safe
+void GTM_getBlockNB(GTM_PARAM);
+
 // Add a request to get a block from the global matrix
 // Nonblocking call, the access operation is pushed to the request queue but not posted
 // This call is not collective, not thread-safe
