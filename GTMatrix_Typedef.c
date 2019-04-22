@@ -167,7 +167,7 @@ void GTM_createGTMatrix(
     
     char *max_nb_op_p = getenv("GTM_MAX_NB_OPS");
     if (max_nb_op_p != NULL) gt_mat->max_nb_op = atoi(max_nb_op_p);
-    if (gt_mat->max_nb_op <  128) gt_mat->max_nb_op =  128;
+    if (gt_mat->max_nb_op <    4) gt_mat->max_nb_op =    4;
     if (gt_mat->max_nb_op > 1024) gt_mat->max_nb_op = 1024;
     
     *_gt_mat = gt_mat;
