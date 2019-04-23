@@ -185,7 +185,7 @@ void GTM_getBlock_(GTM_PARAM, int access_mode)
                 
                 gt_mat->nb_op_proc_cnt[dst_rank]++;
                 gt_mat->nb_op_cnt++;
-                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_op)
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_get)
                     GTM_completeNBAccess(gt_mat);
             }
             

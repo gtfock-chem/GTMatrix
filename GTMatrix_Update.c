@@ -7,10 +7,6 @@
 #include "GTMatrix.h"
 #include "utils.h"
 
-// Note: For accumulation, only element-wise atomicity is needed, use MPI_LOCK_SHARED. 
-//       For replacement, user should guarantee the write sequence and handle conflict,
-//       still use MPI_LOCK_SHARED. 
-
 // Update (put or accumulate) a block to a process using MPI_Accumulate
 // The update operation is not complete when this function returns
 // [in] gt_mat     : GTMatrix handle
@@ -157,7 +153,7 @@ void GTM_updateBlock(
             
             if (access_mode == BLOCKING_ACCESS)
             {
-                MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
                 GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
@@ -168,7 +164,7 @@ void GTM_updateBlock(
             if (access_mode == NONBLOCKING_ACCESS)
             {
                 if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
-                    MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                    MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
                 
                 GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
@@ -177,7 +173,7 @@ void GTM_updateBlock(
                 
                 gt_mat->nb_op_proc_cnt[dst_rank]++;
                 gt_mat->nb_op_cnt++;
-                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_op)
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_acc)
                     GTM_completeNBAccess(gt_mat);
             }
             
@@ -281,7 +277,7 @@ void GTM_execBatchUpdate(GTMatrix_t gt_mat)
         
         if (req_vec->curr_size > 0) 
         {
-            MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+            MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
             for (int i = 0; i < req_vec->curr_size; i++)
             {
                 MPI_Op op      = req_vec->ops[i];

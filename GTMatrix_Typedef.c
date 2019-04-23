@@ -159,16 +159,38 @@ void GTM_createGTMatrix(
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_createReqVector(&gt_mat->req_vec[i]);
     
+    // Set up nonblocking access threshold
     gt_mat->nb_op_proc_cnt = (int*) malloc(gt_mat->comm_size * sizeof(int));
     assert(gt_mat->nb_op_proc_cnt != NULL);
     memset(gt_mat->nb_op_proc_cnt, 0, gt_mat->comm_size * sizeof(int));
-    gt_mat->nb_op_cnt = 0;
-    gt_mat->max_nb_op = 128;
+    gt_mat->nb_op_cnt  = 0;
+    gt_mat->max_nb_acc = 8;
+    gt_mat->max_nb_get = 128;
+    char *max_nb_acc_p = getenv("GTM_MAX_NB_READ");
+    char *max_nb_get_p = getenv("GTM_MAX_NB_UPDATE");
+    if (max_nb_acc_p != NULL) gt_mat->max_nb_acc = atoi(max_nb_acc_p);
+    if (max_nb_get_p != NULL) gt_mat->max_nb_get = atoi(max_nb_get_p);
+    if (gt_mat->max_nb_acc <    4) gt_mat->max_nb_acc =    4;
+    if (gt_mat->max_nb_acc > 1024) gt_mat->max_nb_acc = 1024;
+    if (gt_mat->max_nb_get <    4) gt_mat->max_nb_get =    4;
+    if (gt_mat->max_nb_get > 1024) gt_mat->max_nb_get = 1024;
     
-    char *max_nb_op_p = getenv("GTM_MAX_NB_OPS");
-    if (max_nb_op_p != NULL) gt_mat->max_nb_op = atoi(max_nb_op_p);
-    if (gt_mat->max_nb_op <    4) gt_mat->max_nb_op =    4;
-    if (gt_mat->max_nb_op > 1024) gt_mat->max_nb_op = 1024;
+    // Set up MPI window lock type for update 
+    // By default: (1) for accumulation, only element-wise atomicity is needed, use 
+    // MPI_LOCK_SHARED; (2) for replacement, user should guarantee the write sequence 
+    // and handle conflict, still use MPI_LOCK_SHARED. 
+    gt_mat->acc_lock_type = MPI_LOCK_SHARED;
+    char *acc_lock_type_p = getenv("GTM_UPDATE_ATOMICITY");
+    if (acc_lock_type_p != NULL) 
+    {
+        gt_mat->acc_lock_type = atoi(acc_lock_type_p);
+        switch (gt_mat->acc_lock_type)
+        {
+            case 1:  gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
+            case 2:  gt_mat->acc_lock_type = MPI_LOCK_EXCLUSIVE; break; 
+            default: gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
+        }
+    }
     
     *_gt_mat = gt_mat;
 }
