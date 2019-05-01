@@ -150,19 +150,36 @@ void GTM_updateBlock(
             int col_dist  = blk_c_s - col_start;
             char *blk_ptr = (char*) src_buf;
             blk_ptr += (row_dist * src_buf_ld + col_dist) * gt_mat->unit_size;
-            GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
             
             if (access_mode == BLOCKING_ACCESS)
             {
+                MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
                 GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
-                MPI_Win_flush(dst_rank, gt_mat->mpi_win);
+                MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+            }
+            
+            if (access_mode == NONBLOCKING_ACCESS)
+            {
+                if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
+                    MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
+                
+                GTM_updateBlockToProcess(
+                    gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
+                    blk_c_s, blk_c_num, blk_ptr, src_buf_ld
+                );
+                
+                gt_mat->nb_op_proc_cnt[dst_rank]++;
+                gt_mat->nb_op_cnt++;
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_acc)
+                    GTM_completeNBAccess(gt_mat);
             }
             
             if (access_mode == BATCH_ACCESS)
             {
+                GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
                 GTM_pushToReqVector(
                     req_vec, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
@@ -191,6 +208,28 @@ void GTM_accumulateBlock(GTM_PARAM)
         row_start, row_num,
         col_start, col_num,
         src_buf, src_buf_ld, BLOCKING_ACCESS
+    );
+}
+
+// Nonblocking put a block to the global matrix
+void GTM_putBlockNB(GTM_PARAM)
+{
+    GTM_updateBlock(
+        gt_mat, MPI_REPLACE, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
+    );
+}
+
+// Accumulate a block to the global matrix
+void GTM_accumulateBlockNB(GTM_PARAM)
+{
+    GTM_updateBlock(
+        gt_mat, MPI_SUM, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
     );
 }
 
@@ -238,6 +277,7 @@ void GTM_execBatchUpdate(GTMatrix_t gt_mat)
         
         if (req_vec->curr_size > 0) 
         {
+            MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
             for (int i = 0; i < req_vec->curr_size; i++)
             {
                 MPI_Op op      = req_vec->ops[i];
@@ -252,7 +292,7 @@ void GTM_execBatchUpdate(GTMatrix_t gt_mat)
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
             }
-            MPI_Win_flush(dst_rank, gt_mat->mpi_win);
+            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
         }
         
         GTM_resetReqVector(req_vec);

@@ -11,6 +11,7 @@ struct GTMatrix
     MPI_Comm mpi_comm, shm_comm; // Target communicator
     MPI_Win  mpi_win,  shm_win;  // MPI window for distribute matrix
     MPI_Datatype datatype;       // Matrix data type
+    int acc_lock_type;           // MPI window lock type for update (accumulate & put)
     
     // Matrix size and partition
     int nrows, ncols;            // Matrix size
@@ -30,6 +31,9 @@ struct GTMatrix
     GTM_Req_Vector_t *req_vec;   // Update requests for each process
     int is_batch_updating;       // If we can submit update request
     int is_batch_getting;        // If we can submit get request
+    int *nb_op_proc_cnt;         // Number of outstanding RMA operations on each process from nonblocking calls
+    int nb_op_cnt;               // Total number of outstanding RMA operations from nonblocking calls
+    int max_nb_acc, max_nb_get;  // Maximum number of outstanding update / get operations from nonblocking calls
     
     // MPI Shared memory window
     int shm_rank, shm_size;      // Rank of this process and number of process in the shared memory communicator

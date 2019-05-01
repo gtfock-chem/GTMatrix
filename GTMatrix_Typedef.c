@@ -158,12 +158,39 @@ void GTM_createGTMatrix(
     gt_mat->req_vec = (GTM_Req_Vector_t*) malloc(gt_mat->comm_size * sizeof(GTM_Req_Vector_t));
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_createReqVector(&gt_mat->req_vec[i]);
-
-    // Lock all MPI processes once, unlock when destroying this GTMatrix structure
-    // We only need to guarantee element-wise atomicity for put and accumulate
-    // instead of atomicity of each put or accumulate operation. MPI_Win_lock_all
-    // is equal to MPI_Win_lock with MPI_LOCK_SHARED, that's enough. 
-    MPI_Win_lock_all(0, gt_mat->mpi_win);
+    
+    // Set up nonblocking access threshold
+    gt_mat->nb_op_proc_cnt = (int*) malloc(gt_mat->comm_size * sizeof(int));
+    assert(gt_mat->nb_op_proc_cnt != NULL);
+    memset(gt_mat->nb_op_proc_cnt, 0, gt_mat->comm_size * sizeof(int));
+    gt_mat->nb_op_cnt  = 0;
+    gt_mat->max_nb_acc = 8;
+    gt_mat->max_nb_get = 128;
+    char *max_nb_acc_p = getenv("GTM_MAX_NB_READ");
+    char *max_nb_get_p = getenv("GTM_MAX_NB_UPDATE");
+    if (max_nb_acc_p != NULL) gt_mat->max_nb_acc = atoi(max_nb_acc_p);
+    if (max_nb_get_p != NULL) gt_mat->max_nb_get = atoi(max_nb_get_p);
+    if (gt_mat->max_nb_acc <    4) gt_mat->max_nb_acc =    4;
+    if (gt_mat->max_nb_acc > 1024) gt_mat->max_nb_acc = 1024;
+    if (gt_mat->max_nb_get <    4) gt_mat->max_nb_get =    4;
+    if (gt_mat->max_nb_get > 1024) gt_mat->max_nb_get = 1024;
+    
+    // Set up MPI window lock type for update 
+    // By default: (1) for accumulation, only element-wise atomicity is needed, use 
+    // MPI_LOCK_SHARED; (2) for replacement, user should guarantee the write sequence 
+    // and handle conflict, still use MPI_LOCK_SHARED. 
+    gt_mat->acc_lock_type = MPI_LOCK_SHARED;
+    char *acc_lock_type_p = getenv("GTM_UPDATE_ATOMICITY");
+    if (acc_lock_type_p != NULL) 
+    {
+        gt_mat->acc_lock_type = atoi(acc_lock_type_p);
+        switch (gt_mat->acc_lock_type)
+        {
+            case 1:  gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
+            case 2:  gt_mat->acc_lock_type = MPI_LOCK_EXCLUSIVE; break; 
+            default: gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
+        }
+    }
     
     *_gt_mat = gt_mat;
 }
@@ -171,8 +198,6 @@ void GTM_createGTMatrix(
 void GTM_destroyGTMatrix(GTMatrix_t gt_mat)
 {
     assert(gt_mat != NULL);
-    
-    MPI_Win_unlock_all(gt_mat->mpi_win);
     
     MPI_Win_free(&gt_mat->mpi_win);
     MPI_Win_free(&gt_mat->shm_win);        // This will also free *mat_block
@@ -186,6 +211,16 @@ void GTM_destroyGTMatrix(GTMatrix_t gt_mat)
     //free(gt_mat->mat_block);
     //free(gt_mat->ld_blks);
     free(gt_mat->symm_buf);
+    
+    for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
+    {
+        if (gt_mat->nb_op_proc_cnt[dst_rank] != 0)
+        {
+            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+            gt_mat->nb_op_proc_cnt[dst_rank] = 0;
+        }
+    }
+    free(gt_mat->nb_op_proc_cnt);
     
     for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
     {

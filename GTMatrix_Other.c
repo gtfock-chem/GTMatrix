@@ -25,6 +25,19 @@ void GTM_Sync(GTMatrix_t gt_mat)
     }
 }
 
+void GTM_completeNBAccess(GTMatrix_t gt_mat)
+{
+    for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
+    {
+        if (gt_mat->nb_op_proc_cnt[dst_rank] != 0)
+        {
+            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+            gt_mat->nb_op_proc_cnt[dst_rank] = 0;
+        }
+    }
+    gt_mat->nb_op_cnt = 0;
+}
+
 void GTM_fillGTMatrix(GTMatrix_t gt_mat, void *value)
 {
     if (gt_mat->unit_size == 4)

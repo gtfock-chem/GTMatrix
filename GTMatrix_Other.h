@@ -8,6 +8,9 @@
 // Synchronize all processes
 void GTM_Sync(GTMatrix_t gt_mat);
 
+// Complete all nonblocking accesses
+void GTM_completeNBAccess(GTMatrix_t gt_mat);
+
 // Fill the GTMatrix with a single value
 // This call is collective, not thread-safe
 // [in] *value : Pointer to the value of appropriate type that matches
