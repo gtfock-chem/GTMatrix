@@ -42,17 +42,17 @@ int main(int argc, char **argv)
     GTMatrix_t gt_mat;
     
     // 4 * 4 proc grid, matrix size 8 * 8
-    GTM_createGTMatrix(
+    GTM_create(
         &gt_mat, comm_world, MPI_INT, 4, my_rank, 8, 8, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     int ifill = 0;
-    GTM_fillGTMatrix(gt_mat, &ifill);
+    GTM_fill(gt_mat, &ifill);
 
     for (int i = 0; i < 64; i++) mat[i] = my_rank;
 
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
 
     if (my_rank < ACCU_RANK)
     {
@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     }
     
     // Wait all process to finish their update
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
 
     if (my_rank == ACTOR_RANK)
     {
@@ -77,9 +77,9 @@ int main(int argc, char **argv)
         print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
     }
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
-    GTM_destroyGTMatrix(gt_mat);
+    GTM_destroy(gt_mat);
     
     MPI_Finalize();
 }

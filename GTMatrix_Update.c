@@ -174,7 +174,7 @@ void GTM_updateBlock(
                 gt_mat->nb_op_proc_cnt[dst_rank]++;
                 gt_mat->nb_op_cnt++;
                 if (gt_mat->nb_op_cnt >= gt_mat->max_nb_acc)
-                    GTM_completeNBAccess(gt_mat);
+                    GTM_waitNB(gt_mat);
             }
             
             if (access_mode == BATCH_ACCESS)

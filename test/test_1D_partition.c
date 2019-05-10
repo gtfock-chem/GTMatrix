@@ -57,15 +57,15 @@ int main(int argc, char **argv)
     GTMatrix_t gt_mat;
 
     // 16 * 1 proc grid, matrix size 24 * 4
-    GTM_createGTMatrix(
+    GTM_create(
         &gt_mat, comm_world, MPI_DOUBLE, 8, my_rank, 24, 4,
         16, 1, &r_displs[0], &c_displs[0]
     );
 
     double d = 10.0 + (double) my_rank;
-    GTM_fillGTMatrix(gt_mat, &d);
+    GTM_fill(gt_mat, &d);
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
 
     if (my_rank == ACTOR_RANK)
     {
@@ -73,9 +73,9 @@ int main(int argc, char **argv)
         print_double_mat(&mat[0], 4, 24, 4, "Recv matrix");
     }
 
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
-    GTM_destroyGTMatrix(gt_mat);
+    GTM_destroy(gt_mat);
 
     MPI_Finalize();
 }

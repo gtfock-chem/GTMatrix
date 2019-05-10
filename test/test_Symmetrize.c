@@ -55,16 +55,16 @@ int main(int argc, char **argv)
     GTMatrix_t gt_mat;
     
     // 4 * 4 proc grid, matrix size 10 * 10
-    GTM_createGTMatrix(
+    GTM_create(
         &gt_mat, comm_world, MPI_DOUBLE, 8, my_rank, 10, 10, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     // Set local data
     double d_fill = (double) (my_rank + 10);
-    GTM_fillGTMatrix(gt_mat, &d_fill);
+    GTM_fill(gt_mat, &d_fill);
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
     if (my_rank == ACTOR_RANK)
     {
@@ -72,19 +72,19 @@ int main(int argc, char **argv)
         print_double_mat(&mat[0], 10, 10, 10, "Initial matrix");
     }
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
     // Symmetrizing
-    GTM_symmetrizeGTMatrix(gt_mat);
+    GTM_symmetrize(gt_mat);
     if (my_rank == ACTOR_RANK)
     {
         GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10);
         print_double_mat(&mat[0], 10, 10, 10, "Symmetrized matrix");
     }
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
-    GTM_destroyGTMatrix(gt_mat);
+    GTM_destroy(gt_mat);
     
     MPI_Finalize();
 }

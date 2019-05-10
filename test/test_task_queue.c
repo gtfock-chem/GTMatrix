@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     GTM_Task_Queue_t btq;
-    GTM_createGTMTaskQueue(&btq, MPI_COMM_WORLD);
+    GTM_createTaskQueue(&btq, MPI_COMM_WORLD);
 
     int accu = 0, task, total;
     int dst_rank = 1;
@@ -46,6 +46,6 @@ int main(int argc, char **argv)
         printf("All proc tasks sum = %d, expected value = %d\n", total, expected);
     }
 
-    GTM_destroyGTMTaskQueue(btq);
+    GTM_destroyTaskQueue(btq);
     MPI_Finalize();
 }

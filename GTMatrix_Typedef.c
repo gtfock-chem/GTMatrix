@@ -8,7 +8,7 @@
 #include "GTM_Req_Vector.h"
 #include "utils.h"
 
-void GTM_createGTMatrix(
+void GTM_create(
     GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
@@ -195,7 +195,7 @@ void GTM_createGTMatrix(
     *_gt_mat = gt_mat;
 }
 
-void GTM_destroyGTMatrix(GTMatrix_t gt_mat)
+void GTM_destroy(GTMatrix_t gt_mat)
 {
     assert(gt_mat != NULL);
     

@@ -79,7 +79,7 @@ typedef struct GTMatrix* GTMatrix_t;
 // [in]  c_blocks   : Number of blocks on column direction
 // [in]  *r_displs  : Row direction displacement array, nrows+1 elements
 // [in]  *c_displs  : Column direction displacement array, ncols+1 elements
-void GTM_createGTMatrix(
+void GTM_create(
     GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
@@ -87,6 +87,6 @@ void GTM_createGTMatrix(
 
 // Free a GTMatrix structure
 // This call is collective, thread-safe
-void GTM_destroyGTMatrix(GTMatrix_t gt_mat);
+void GTM_destroy(GTMatrix_t gt_mat);
 
 #endif

@@ -8,7 +8,7 @@
 #include "GTMatrix_Get.h"
 #include "GTMatrix_Other.h"
 
-void GTM_Sync(GTMatrix_t gt_mat)
+void GTM_sync(GTMatrix_t gt_mat)
 {
     if (SYNC_IBARRIER == 1)
     {
@@ -25,7 +25,7 @@ void GTM_Sync(GTMatrix_t gt_mat)
     }
 }
 
-void GTM_completeNBAccess(GTMatrix_t gt_mat)
+void GTM_waitNB(GTMatrix_t gt_mat)
 {
     for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
     {
@@ -38,7 +38,7 @@ void GTM_completeNBAccess(GTMatrix_t gt_mat)
     gt_mat->nb_op_cnt = 0;
 }
 
-void GTM_fillGTMatrix(GTMatrix_t gt_mat, void *value)
+void GTM_fill(GTMatrix_t gt_mat, void *value)
 {
     if (gt_mat->unit_size == 4)
     {
@@ -62,7 +62,7 @@ void GTM_fillGTMatrix(GTMatrix_t gt_mat, void *value)
     }
 }
 
-void GTM_symmetrizeGTMatrix(GTMatrix_t gt_mat)
+void GTM_symmetrize(GTMatrix_t gt_mat)
 {
     // Sanity check
     if (gt_mat->nrows != gt_mat->ncols) return;
@@ -73,7 +73,7 @@ void GTM_symmetrizeGTMatrix(GTMatrix_t gt_mat)
     int my_row_start = gt_mat->r_displs[gt_mat->my_rowblk];
     int my_col_start = gt_mat->c_displs[gt_mat->my_colblk];
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
     GTM_getBlock(
         gt_mat, 
@@ -84,7 +84,7 @@ void GTM_symmetrizeGTMatrix(GTMatrix_t gt_mat)
     
     // Wait all processes to get the symmetric block before modifying
     // local block, or some processes will get the modified block
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
     
     if (MPI_INT == gt_mat->datatype)
     {
@@ -117,5 +117,5 @@ void GTM_symmetrizeGTMatrix(GTMatrix_t gt_mat)
         }
     }
     
-    GTM_Sync(gt_mat);
+    GTM_sync(gt_mat);
 }

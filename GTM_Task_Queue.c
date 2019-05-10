@@ -8,7 +8,7 @@
 #include "GTM_Task_Queue.h"
 #include "utils.h"
 
-void GTM_createGTMTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm)
+void GTM_createTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm)
 {
     GTM_Task_Queue_t gtm_tq = (GTM_Task_Queue_t) malloc(sizeof(struct GTM_Task_Queue));
     assert(gtm_tq != NULL);
@@ -31,7 +31,7 @@ void GTM_createGTMTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm)
     *_gtm_tq = gtm_tq;
 }
 
-void GTM_destroyGTMTaskQueue(GTM_Task_Queue_t gtm_tq)
+void GTM_destroyTaskQueue(GTM_Task_Queue_t gtm_tq)
 {
     _mm_free(gtm_tq->task_counter);
 
@@ -41,7 +41,7 @@ void GTM_destroyGTMTaskQueue(GTM_Task_Queue_t gtm_tq)
     free(gtm_tq);
 }
 
-void GTM_resetGTMTaskQueue(GTM_Task_Queue_t gtm_tq)
+void GTM_resetTaskQueue(GTM_Task_Queue_t gtm_tq)
 {
     gtm_tq->task_counter[0] = 0;
 }
