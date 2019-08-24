@@ -1,6 +1,6 @@
 LIB     = ../libGTMatrix.a
 MPICC   = mpiicc
-CFLAGS  = -Wall -g -O3 -qopenmp -std=gnu99
+CFLAGS  = -Wall -g -O3 -qopenmp -std=c99
 LDFLAGS = -qopenmp
 AR      = xiar rcs
 

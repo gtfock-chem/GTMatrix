@@ -19,13 +19,13 @@ int GTM_getBlockNB(GTM_PARAM);
 int GTM_addGetBlockRequest(GTM_PARAM);
 
 // Start a batch get epoch and allow to submit get requests
-int GTM_startBatchGet(GTMatrix_t gt_mat);
+int GTM_startBatchGet(GTMatrix_t gtm);
 
 // Execute all get requests in the queues
-int GTM_execBatchGet(GTMatrix_t gt_mat);
+int GTM_execBatchGet(GTMatrix_t gtm);
 
 // Stop a batch get epoch and disallow to submit get requests
-int GTM_stopBatchGet(GTMatrix_t gt_mat);
+int GTM_stopBatchGet(GTMatrix_t gtm);
 
 
 #endif

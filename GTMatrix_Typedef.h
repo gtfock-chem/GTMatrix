@@ -55,9 +55,9 @@ typedef struct GTMatrix* GTMatrix_t;
 #define BATCH_ACCESS         2  // The access operation is pushed to the request queue but not posted
 
 #define GTM_PARAM \
-    GTMatrix_t gt_mat, int row_start, int row_num, \
+    GTMatrix_t gtm, int row_start, int row_num, \
     int col_start, int col_num, void *src_buf, int src_buf_ld
-// gt_mat     : GTMatrix handle
+// gtm        : GTMatrix handle
 // row_start  : 1st row of the block
 // row_num    : Number of rows the block has
 // col_start  : 1st column of the block
@@ -81,15 +81,15 @@ typedef struct GTMatrix* GTMatrix_t;
 //   *r_displs : Row direction displacement array, nrows+1 elements
 //   *c_displs : Column direction displacement array, ncols+1 elements
 // Output parameter:
-//   *_gt_mat : Pointer to the created GTMatrix structure
+//   *_gtm : Pointer to the created GTMatrix structure
 int GTM_create(
-    GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
+    GTMatrix_t *_gtm, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
 );
 
 // Free a GTMatrix structure
 // This call is collective, thread-safe
-int GTM_destroy(GTMatrix_t gt_mat);
+int GTM_destroy(GTMatrix_t gtm);
 
 #endif

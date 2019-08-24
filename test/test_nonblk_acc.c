@@ -39,41 +39,41 @@ int main(int argc, char **argv)
     MPI_Comm comm_world;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_world);
     
-    GTMatrix_t gt_mat;
+    GTMatrix_t gtm;
     
     // 4 * 4 proc grid, matrix size 8 * 8
     GTM_create(
-        &gt_mat, comm_world, MPI_INT, 4, my_rank, 8, 8, 
+        &gtm, comm_world, MPI_INT, 4, my_rank, 8, 8, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     int ifill = 0;
-    GTM_fill(gt_mat, &ifill);
+    GTM_fill(gtm, &ifill);
 
     for (int i = 0; i < 64; i++) mat[i] = my_rank;
 
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
 
     if (my_rank < ACCU_RANK)
     {
         for (int irow = 0; irow < 8; irow++)
-            GTM_accBlockNB(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
-        GTM_waitNB(gt_mat);
+            GTM_accBlockNB(gtm, irow, 1, 0, 8, &mat[irow * 8], 8);
+        GTM_waitNB(gtm);
     }
     
     // Wait all process to finish their update
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
 
     if (my_rank == ACTOR_RANK)
     {
         for (int i = 0; i < 64; i++) mat[i] = -1;
-        GTM_getBlock(gt_mat, 0, 8, 0, 8, &mat[0], 8);
+        GTM_getBlock(gtm, 0, 8, 0, 8, &mat[0], 8);
         print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
     }
     
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
     
-    GTM_destroy(gt_mat);
+    GTM_destroy(gtm);
     
     MPI_Finalize();
 }

@@ -25,16 +25,16 @@ int GTM_addPutBlockRequest(GTM_PARAM);
 int GTM_addAccBlockRequest(GTM_PARAM);
 
 // Start a batch update epoch and allow to submit update requests
-int GTM_startBatchPut(GTMatrix_t gt_mat);
-int GTM_startBatchAcc(GTMatrix_t gt_mat);
+int GTM_startBatchPut(GTMatrix_t gtm);
+int GTM_startBatchAcc(GTMatrix_t gtm);
 
 // Execute all update requests in the queues
-int GTM_execBatchPut(GTMatrix_t gt_mat);
-int GTM_execBatchAcc(GTMatrix_t gt_mat);
+int GTM_execBatchPut(GTMatrix_t gtm);
+int GTM_execBatchAcc(GTMatrix_t gtm);
 
 // Stop a batch update epoch and disallow to submit update requests
-int GTM_stopBatchPut(GTMatrix_t gt_mat);
-int GTM_stopBatchAcc(GTMatrix_t gt_mat);
+int GTM_stopBatchPut(GTMatrix_t gtm);
+int GTM_stopBatchAcc(GTMatrix_t gtm);
 
 
 #endif

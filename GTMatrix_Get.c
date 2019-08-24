@@ -13,7 +13,7 @@
 // Post the operation of getting a blocking from a process using MPI_Get
 // The get operation is not complete when this function returns
 // Input parameters:
-//   gt_mat     : GTMatrix handle
+//   gtm        : GTMatrix handle
 //   dst_rank   : Target process
 //   row_start  : 1st row of the required block
 //   row_num    : Number of rows the required block has
@@ -23,23 +23,23 @@
 // Output parameter:
 //   *src_buf : Receive buffer
 int GTM_getBlockFromProcess(
-    GTMatrix_t gt_mat, int dst_rank, 
+    GTMatrix_t gtm, int dst_rank, 
     int row_start, int row_num,
     int col_start, int col_num,
     void *src_buf, int src_buf_ld
 )
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     
     int row_end       = row_start + row_num;
     int col_end       = col_start + col_num;
-    int dst_rowblk    = dst_rank / gt_mat->c_blocks;
-    int dst_colblk    = dst_rank % gt_mat->c_blocks;
-    int dst_blk_ld    = gt_mat->ld_local; // gt_mat->ld_blks[dst_rank];
-    int dst_row_start = gt_mat->r_displs[dst_rowblk];
-    int dst_col_start = gt_mat->c_displs[dst_colblk];
-    int dst_row_end   = gt_mat->r_displs[dst_rowblk + 1];
-    int dst_col_end   = gt_mat->c_displs[dst_colblk + 1];
+    int dst_rowblk    = dst_rank / gtm->c_blocks;
+    int dst_colblk    = dst_rank % gtm->c_blocks;
+    int dst_blk_ld    = gtm->ld_local; // gtm->ld_blks[dst_rank];
+    int dst_row_start = gtm->r_displs[dst_rowblk];
+    int dst_col_start = gtm->c_displs[dst_colblk];
+    int dst_row_end   = gtm->r_displs[dst_rowblk + 1];
+    int dst_col_end   = gtm->c_displs[dst_colblk + 1];
     
     // Sanity check
     if ((row_start < dst_row_start) ||
@@ -49,20 +49,20 @@ int GTM_getBlockFromProcess(
         (row_num   * col_num == 0)) return GTM_INVALID_BLOCK;
 
     // Check if the target process is in the shared memory communicator
-    int shm_rank  = getElementIndexInArray(dst_rank, gt_mat->shm_global_ranks, gt_mat->shm_size);
-    void *shm_ptr = (shm_rank == -1) ? NULL : gt_mat->shm_mat_blocks[shm_rank];
+    int shm_rank  = getElementIndexInArray(dst_rank, gtm->shm_global_ranks, gtm->shm_size);
+    void *shm_ptr = (shm_rank == -1) ? NULL : gtm->shm_mat_blocks[shm_rank];
     
     char *src_ptr = (char*) src_buf;
-    int row_bytes = col_num * gt_mat->unit_size;
+    int row_bytes = col_num * gtm->unit_size;
     int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
     dst_pos += col_start - dst_col_start;
 
     if (shm_rank != -1)
     {
         // Target process and current process is in same node, use memcpy
-        char *dst_ptr  = shm_ptr + dst_pos * gt_mat->unit_size;
-        int src_ptr_ld = src_buf_ld * gt_mat->unit_size;
-        int dst_ptr_ld = dst_blk_ld * gt_mat->unit_size;
+        char *dst_ptr  = shm_ptr + dst_pos * gtm->unit_size;
+        int src_ptr_ld = src_buf_ld * gtm->unit_size;
+        int dst_ptr_ld = dst_blk_ld * gtm->unit_size;
         for (int irow = 0; irow < row_num; irow++)
         {
             memcpy(src_ptr, dst_ptr, row_bytes);
@@ -71,37 +71,37 @@ int GTM_getBlockFromProcess(
         }
     } else {
         // Target process and current process isn't in same node, use MPI_Get
-        int src_ptr_ld = src_buf_ld * gt_mat->unit_size;
+        int src_ptr_ld = src_buf_ld * gtm->unit_size;
         if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
         {
             // Block is small, use predefined data type or define a new 
             // data type to reduce MPI_Get overhead
             int block_dt_id = (row_num - 1) * MPI_DT_SB_DIM_MAX + (col_num - 1);
-            MPI_Datatype *dst_dt = &gt_mat->sb_stride[block_dt_id];
+            MPI_Datatype *dst_dt = &gtm->sb_stride[block_dt_id];
             if (col_num == src_buf_ld)
             {
-                MPI_Datatype *rcv_dt_ns = &gt_mat->sb_nostride[block_dt_id];
-                MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, gt_mat->mpi_win);
+                MPI_Datatype *rcv_dt_ns = &gtm->sb_nostride[block_dt_id];
+                MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
             } else {
-                if (gt_mat->ld_local == src_buf_ld)
+                if (gtm->ld_local == src_buf_ld)
                 {
-                    MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, gt_mat->mpi_win);
+                    MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
                 } else {
                     MPI_Datatype rcv_dt;
-                    MPI_Type_vector(row_num, col_num, src_buf_ld, gt_mat->datatype, &rcv_dt);
+                    MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
                     MPI_Type_commit(&rcv_dt);
-                    MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, gt_mat->mpi_win);
+                    MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
                     MPI_Type_free(&rcv_dt);
                 }
             }
         } else {
             // Define a MPI data type to reduce number of request
             MPI_Datatype dst_dt, rcv_dt;
-            MPI_Type_vector(row_num, col_num, dst_blk_ld, gt_mat->datatype, &dst_dt);
-            MPI_Type_vector(row_num, col_num, src_buf_ld, gt_mat->datatype, &rcv_dt);
+            MPI_Type_vector(row_num, col_num, dst_blk_ld, gtm->datatype, &dst_dt);
+            MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
             MPI_Type_commit(&dst_dt);
             MPI_Type_commit(&rcv_dt);
-            MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, gt_mat->mpi_win);
+            MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, gtm->mpi_win);
             MPI_Type_free(&dst_dt);
             MPI_Type_free(&rcv_dt);
         }
@@ -113,7 +113,7 @@ int GTM_getBlockFromProcess(
 // Non-blocking, data may not be ready before synchronization
 // This call is not collective, thread-safe
 // Input paramaters:
-//   gt_mat      : GTMatrix handle
+//   gtm      : GTMatrix handle
 //   row_start   : 1st row of the required block
 //   row_num     : Number of rows the required block has
 //   col_start   : 1st column of the required block
@@ -124,44 +124,44 @@ int GTM_getBlockFromProcess(
 //   *src_buf : Receive buffer
 int GTM_getBlock_(GTM_PARAM, int access_mode)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     
     // Sanity check
     if ((row_start < 0) || (col_start < 0) ||
-        (row_start + row_num > gt_mat->nrows)  ||
-        (col_start + col_num > gt_mat->ncols)  ||
+        (row_start + row_num > gtm->nrows)  ||
+        (col_start + col_num > gtm->ncols)  ||
         (row_num * col_num == 0)) return GTM_INVALID_BLOCK;
     
     // Find the processes that contain the requested block
     int s_blk_r, e_blk_r, s_blk_c, e_blk_c;
     int row_end = row_start + row_num - 1;
     int col_end = col_start + col_num - 1;
-    for (int i = 0; i < gt_mat->r_blocks; i++)
+    for (int i = 0; i < gtm->r_blocks; i++)
     {
-        if ((gt_mat->r_displs[i] <= row_start) && 
-            (row_start < gt_mat->r_displs[i+1])) s_blk_r = i;
-        if ((gt_mat->r_displs[i] <= row_end)   && 
-            (row_end   < gt_mat->r_displs[i+1])) e_blk_r = i;
+        if ((gtm->r_displs[i] <= row_start) && 
+            (row_start < gtm->r_displs[i+1])) s_blk_r = i;
+        if ((gtm->r_displs[i] <= row_end)   && 
+            (row_end   < gtm->r_displs[i+1])) e_blk_r = i;
     }
-    for (int i = 0; i < gt_mat->c_blocks; i++)
+    for (int i = 0; i < gtm->c_blocks; i++)
     {
-        if ((gt_mat->c_displs[i] <= col_start) && 
-            (col_start < gt_mat->c_displs[i+1])) s_blk_c = i;
-        if ((gt_mat->c_displs[i] <= col_end)   && 
-            (col_end   < gt_mat->c_displs[i+1])) e_blk_c = i;
+        if ((gtm->c_displs[i] <= col_start) && 
+            (col_start < gtm->c_displs[i+1])) s_blk_c = i;
+        if ((gtm->c_displs[i] <= col_end)   && 
+            (col_end   < gtm->c_displs[i+1])) e_blk_c = i;
     }
     
     // Fetch data from each process
     int blk_r_s, blk_r_e, blk_c_s, blk_c_e, need_to_fetch;
     for (int blk_r = s_blk_r; blk_r <= e_blk_r; blk_r++)      // Notice: <=
     {
-        int dst_r_s = gt_mat->r_displs[blk_r];
-        int dst_r_e = gt_mat->r_displs[blk_r + 1] - 1;
+        int dst_r_s = gtm->r_displs[blk_r];
+        int dst_r_e = gtm->r_displs[blk_r + 1] - 1;
         for (int blk_c = s_blk_c; blk_c <= e_blk_c; blk_c++)  // Notice: <=
         {
-            int dst_c_s  = gt_mat->c_displs[blk_c];
-            int dst_c_e  = gt_mat->c_displs[blk_c + 1] - 1;
-            int dst_rank = blk_r * gt_mat->c_blocks + blk_c;
+            int dst_c_s  = gtm->c_displs[blk_c];
+            int dst_c_e  = gtm->c_displs[blk_c + 1] - 1;
+            int dst_rank = blk_r * gtm->c_blocks + blk_c;
             getRectIntersection(
                 dst_r_s,   dst_r_e, dst_c_s,   dst_c_e,
                 row_start, row_end, col_start, col_end,
@@ -173,39 +173,39 @@ int GTM_getBlock_(GTM_PARAM, int access_mode)
             int row_dist  = blk_r_s - row_start;
             int col_dist  = blk_c_s - col_start;
             char *blk_ptr = (char*) src_buf;
-            blk_ptr += (row_dist * src_buf_ld + col_dist) * gt_mat->unit_size;
+            blk_ptr += (row_dist * src_buf_ld + col_dist) * gtm->unit_size;
             
             int ret = GTM_SUCCESS;
             
             if (access_mode == BLOCKING_ACCESS)
             {
-                MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gtm->mpi_win);
                 ret = GTM_getBlockFromProcess(
-                    gt_mat, dst_rank, blk_r_s, blk_r_num, 
+                    gtm, dst_rank, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
-                MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+                MPI_Win_unlock(dst_rank, gtm->mpi_win);
             }
             
             if (access_mode == NONBLOCKING_ACCESS)
             {
-                if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
-                    MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+                if (gtm->nb_op_proc_cnt[dst_rank] == 0)
+                    MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gtm->mpi_win);
                 
                 ret = GTM_getBlockFromProcess(
-                    gt_mat, dst_rank, blk_r_s, blk_r_num, 
+                    gtm, dst_rank, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
                 
-                gt_mat->nb_op_proc_cnt[dst_rank]++;
-                gt_mat->nb_op_cnt++;
-                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_get)
-                    GTM_waitNB(gt_mat);
+                gtm->nb_op_proc_cnt[dst_rank]++;
+                gtm->nb_op_cnt++;
+                if (gtm->nb_op_cnt >= gtm->max_nb_get)
+                    GTM_waitNB(gtm);
             }
             
             if (access_mode == BATCH_ACCESS)
             {
-                GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
+                GTM_Req_Vector_t req_vec = gtm->req_vec[dst_rank];
                 ret = GTM_pushToReqVector(
                     req_vec, MPI_NO_OP, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
@@ -221,9 +221,9 @@ int GTM_getBlock_(GTM_PARAM, int access_mode)
 // Get a block from the global matrix
 int GTM_getBlock(GTM_PARAM)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     return GTM_getBlock_(
-        gt_mat,
+        gtm,
         row_start, row_num,
         col_start, col_num,
         src_buf, src_buf_ld, BLOCKING_ACCESS
@@ -233,11 +233,9 @@ int GTM_getBlock(GTM_PARAM)
 // Nonblocking get a block from the global matrix
 int GTM_getBlockNB(GTM_PARAM)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     return GTM_getBlock_(
-        gt_mat,
-        row_start, row_num,
-        col_start, col_num,
+        gtm, row_start, row_num, col_start, col_num,
         src_buf, src_buf_ld, NONBLOCKING_ACCESS
     );
 }
@@ -245,43 +243,41 @@ int GTM_getBlockNB(GTM_PARAM)
 // Add a request to get a block from the global matrix
 int GTM_addGetBlockRequest(GTM_PARAM)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     return GTM_getBlock_(
-        gt_mat,
-        row_start, row_num,
-        col_start, col_num,
+        gtm, row_start, row_num, col_start, col_num,
         src_buf, src_buf_ld, BATCH_ACCESS
     );
 }
 
 // Start a batch get epoch and allow to submit get requests
-int GTM_startBatchGet(GTMatrix_t gt_mat)
+int GTM_startBatchGet(GTMatrix_t gtm)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
-    if (gt_mat->in_batch_put) return GTM_IN_BATCHED_PUT;
-    if (gt_mat->in_batch_get) return GTM_IN_BATCHED_GET;
-    if (gt_mat->in_batch_acc) return GTM_IN_BATCHED_ACC;
+    if (gtm == NULL) return GTM_NULL_PTR;
+    if (gtm->in_batch_put) return GTM_IN_BATCHED_PUT;
+    if (gtm->in_batch_get) return GTM_IN_BATCHED_GET;
+    if (gtm->in_batch_acc) return GTM_IN_BATCHED_ACC;
     
-    for (int i = 0; i < gt_mat->comm_size; i++)
-        GTM_resetReqVector(gt_mat->req_vec[i]);
-    gt_mat->in_batch_get = 1;
+    for (int i = 0; i < gtm->comm_size; i++)
+        GTM_resetReqVector(gtm->req_vec[i]);
+    gtm->in_batch_get = 1;
     return GTM_SUCCESS;
 }
 
 // Execute all get requests in the queues
-int GTM_execBatchGet(GTMatrix_t gt_mat)
+int GTM_execBatchGet(GTMatrix_t gtm)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
-    if (gt_mat->in_batch_get == 0) return GTM_NO_BATCHED_GET;
+    if (gtm == NULL) return GTM_NULL_PTR;
+    if (gtm->in_batch_get == 0) return GTM_NO_BATCHED_GET;
     
-    for (int _dst_rank = gt_mat->my_rank; _dst_rank < gt_mat->comm_size + gt_mat->my_rank; _dst_rank++)
+    for (int _dst_rank = gtm->my_rank; _dst_rank < gtm->comm_size + gtm->my_rank; _dst_rank++)
     {    
-        int dst_rank = _dst_rank % gt_mat->comm_size;
-        GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
+        int dst_rank = _dst_rank % gtm->comm_size;
+        GTM_Req_Vector_t req_vec = gtm->req_vec[dst_rank];
         
         if (req_vec->curr_size > 0)
         {
-            MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gt_mat->mpi_win);
+            MPI_Win_lock(MPI_LOCK_SHARED, dst_rank, 0, gtm->mpi_win);
             for (int i = 0; i < req_vec->curr_size; i++)
             {
                 int blk_r_s    = req_vec->row_starts[i];
@@ -291,12 +287,12 @@ int GTM_execBatchGet(GTMatrix_t gt_mat)
                 void *blk_ptr  = req_vec->src_bufs[i];
                 int src_buf_ld = req_vec->src_buf_lds[i];
                 int ret = GTM_getBlockFromProcess(
-                    gt_mat, dst_rank, blk_r_s, blk_r_num, 
+                    gtm, dst_rank, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
                 if (ret != GTM_SUCCESS) return ret;
             }
-            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
+            MPI_Win_unlock(dst_rank, gtm->mpi_win);
         }
         
         GTM_resetReqVector(req_vec);
@@ -305,10 +301,10 @@ int GTM_execBatchGet(GTMatrix_t gt_mat)
 }
 
 // Stop a batch get epoch and disallow to submit get requests
-int GTM_stopBatchGet(GTMatrix_t gt_mat)
+int GTM_stopBatchGet(GTMatrix_t gtm)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
-    if (gt_mat->in_batch_get == 0) return GTM_NO_BATCHED_GET;
-    gt_mat->in_batch_get = 0;
+    if (gtm == NULL) return GTM_NULL_PTR;
+    if (gtm->in_batch_get == 0) return GTM_NO_BATCHED_GET;
+    gtm->in_batch_get = 0;
     return GTM_SUCCESS;
 }

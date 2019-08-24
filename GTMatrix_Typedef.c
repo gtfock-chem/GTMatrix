@@ -10,49 +10,49 @@
 #include "utils.h"
 
 int GTM_create(
-    GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
+    GTMatrix_t *_gtm, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
 )
 {
-    GTMatrix_t gt_mat = (GTMatrix_t) malloc(sizeof(struct GTMatrix));
-    if (gt_mat == NULL) return GTM_ALLOC_FAILED;
+    GTMatrix_t gtm = (GTMatrix_t) malloc(sizeof(struct GTMatrix));
+    if (gtm == NULL) return GTM_ALLOC_FAILED;
     
     // Copy and validate matrix and process info
     int comm_size;
     MPI_Comm_size(comm, &comm_size);
     assert(my_rank < comm_size);
     assert(r_blocks * c_blocks == comm_size);
-    MPI_Comm_dup(comm, &gt_mat->mpi_comm);
-    gt_mat->datatype  = datatype;
-    gt_mat->unit_size = unit_size;
-    gt_mat->my_rank   = my_rank;
-    gt_mat->comm_size = comm_size;
-    gt_mat->nrows     = nrows;
-    gt_mat->ncols     = ncols;
-    gt_mat->r_blocks  = r_blocks;
-    gt_mat->c_blocks  = c_blocks;
-    gt_mat->my_rowblk = my_rank / c_blocks;
-    gt_mat->my_colblk = my_rank % c_blocks;
+    MPI_Comm_dup(comm, &gtm->mpi_comm);
+    gtm->datatype  = datatype;
+    gtm->unit_size = unit_size;
+    gtm->my_rank   = my_rank;
+    gtm->comm_size = comm_size;
+    gtm->nrows     = nrows;
+    gtm->ncols     = ncols;
+    gtm->r_blocks  = r_blocks;
+    gtm->c_blocks  = c_blocks;
+    gtm->my_rowblk = my_rank / c_blocks;
+    gtm->my_colblk = my_rank % c_blocks;
     
-    gt_mat->in_batch_get = 0;
-    gt_mat->in_batch_put = 0;
-    gt_mat->in_batch_acc = 0;
+    gtm->in_batch_get = 0;
+    gtm->in_batch_put = 0;
+    gtm->in_batch_acc = 0;
     
     // Allocate space for displacement arrays
     int r_displs_mem_size = sizeof(int) * (r_blocks + 1);
     int c_displs_mem_size = sizeof(int) * (c_blocks + 1);
-    gt_mat->r_displs  = (int*) malloc(r_displs_mem_size);
-    gt_mat->c_displs  = (int*) malloc(c_displs_mem_size);
-    gt_mat->r_blklens = (int*) malloc(sizeof(int) * r_blocks);
-    gt_mat->c_blklens = (int*) malloc(sizeof(int) * c_blocks);
-    if ((gt_mat->r_displs  == NULL) || (gt_mat->c_displs  == NULL) ||
-        (gt_mat->r_blklens == NULL) || (gt_mat->c_blklens == NULL))
+    gtm->r_displs  = (int*) malloc(r_displs_mem_size);
+    gtm->c_displs  = (int*) malloc(c_displs_mem_size);
+    gtm->r_blklens = (int*) malloc(sizeof(int) * r_blocks);
+    gtm->c_blklens = (int*) malloc(sizeof(int) * c_blocks);
+    if ((gtm->r_displs  == NULL) || (gtm->c_displs  == NULL) ||
+        (gtm->r_blklens == NULL) || (gtm->c_blklens == NULL))
     {
         return GTM_ALLOC_FAILED;
     }
-    memcpy(gt_mat->r_displs, r_displs, r_displs_mem_size);
-    memcpy(gt_mat->c_displs, c_displs, c_displs_mem_size);
+    memcpy(gtm->r_displs, r_displs, r_displs_mem_size);
+    memcpy(gtm->c_displs, c_displs, c_displs_mem_size);
     
     // Validate r_displs and c_displs, then generate r_blklens and c_blklens
     int r_displs_valid = 1, c_displs_valid = 1;
@@ -62,69 +62,69 @@ int GTM_create(
     if (c_displs[c_blocks] != ncols) c_displs_valid = 0;
     for (int i = 0; i < r_blocks; i++)
     {
-        gt_mat->r_blklens[i] = r_displs[i + 1] - r_displs[i];
-        if (gt_mat->r_blklens[i] <= 0) r_displs_valid = 0;
+        gtm->r_blklens[i] = r_displs[i + 1] - r_displs[i];
+        if (gtm->r_blklens[i] <= 0) r_displs_valid = 0;
     }
     for (int i = 0; i < c_blocks; i++)
     {
-        gt_mat->c_blklens[i] = c_displs[i + 1] - c_displs[i];
-        if (gt_mat->c_blklens[i] <= 0) c_displs_valid = 0;
+        gtm->c_blklens[i] = c_displs[i + 1] - c_displs[i];
+        if (gtm->c_blklens[i] <= 0) c_displs_valid = 0;
     }
     if (r_displs_valid == 0) return GTM_INVALID_R_DISPLS;
     if (c_displs_valid == 0) return GTM_INVALID_C_DISPLS;
-    gt_mat->my_nrows = gt_mat->r_blklens[gt_mat->my_rowblk];
-    gt_mat->my_ncols = gt_mat->c_blklens[gt_mat->my_colblk];
-    // gt_mat->ld_local = gt_mat->my_ncols;
+    gtm->my_nrows = gtm->r_blklens[gtm->my_rowblk];
+    gtm->my_ncols = gtm->c_blklens[gtm->my_colblk];
+    // gtm->ld_local = gtm->my_ncols;
     // Use the same local leading dimension for all processes
-    MPI_Allreduce(&gt_mat->my_ncols, &gt_mat->ld_local, 1, MPI_INT, MPI_MAX, gt_mat->mpi_comm);
+    MPI_Allreduce(&gtm->my_ncols, &gtm->ld_local, 1, MPI_INT, MPI_MAX, gtm->mpi_comm);
     
-    gt_mat->symm_buf = malloc(unit_size * gt_mat->my_nrows * gt_mat->my_ncols);
-    if (gt_mat->symm_buf == NULL) return GTM_ALLOC_FAILED;
+    gtm->symm_buf = malloc(unit_size * gtm->my_nrows * gtm->my_ncols);
+    if (gtm->symm_buf == NULL) return GTM_ALLOC_FAILED;
     
     // Allocate shared memory and its MPI window
     // (1) Split communicator to get shared memory communicator
-    MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &gt_mat->shm_comm);
-    MPI_Comm_rank(gt_mat->shm_comm, &gt_mat->shm_rank);
-    MPI_Comm_size(gt_mat->shm_comm, &gt_mat->shm_size);
-    gt_mat->shm_global_ranks = (int*) malloc(sizeof(int) * gt_mat->shm_size);
-    if (gt_mat->shm_global_ranks == NULL) return GTM_ALLOC_FAILED;
-    MPI_Allgather(&gt_mat->my_rank, 1, MPI_INT, gt_mat->shm_global_ranks, 1, MPI_INT, gt_mat->shm_comm);
+    MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &gtm->shm_comm);
+    MPI_Comm_rank(gtm->shm_comm, &gtm->shm_rank);
+    MPI_Comm_size(gtm->shm_comm, &gtm->shm_size);
+    gtm->shm_global_ranks = (int*) malloc(sizeof(int) * gtm->shm_size);
+    if (gtm->shm_global_ranks == NULL) return GTM_ALLOC_FAILED;
+    MPI_Allgather(&gtm->my_rank, 1, MPI_INT, gtm->shm_global_ranks, 1, MPI_INT, gtm->shm_comm);
     // (2) Allocate shared memory 
     int shm_max_nrow, shm_max_ncol, shm_mb_bytes;
-    MPI_Allreduce(&gt_mat->my_nrows, &shm_max_nrow, 1, MPI_INT, MPI_MAX, gt_mat->shm_comm);
-    MPI_Allreduce(&gt_mat->ld_local, &shm_max_ncol, 1, MPI_INT, MPI_MAX, gt_mat->shm_comm);
-    shm_mb_bytes  = shm_max_ncol * shm_max_nrow * gt_mat->shm_size * unit_size;
+    MPI_Allreduce(&gtm->my_nrows, &shm_max_nrow, 1, MPI_INT, MPI_MAX, gtm->shm_comm);
+    MPI_Allreduce(&gtm->ld_local, &shm_max_ncol, 1, MPI_INT, MPI_MAX, gtm->shm_comm);
+    shm_mb_bytes  = shm_max_ncol * shm_max_nrow * gtm->shm_size * unit_size;
     MPI_Info shm_info;
     MPI_Info_create(&shm_info);
     MPI_Info_set(shm_info, "alloc_shared_noncontig", "true");
     MPI_Win_allocate_shared(
-        shm_mb_bytes, unit_size, shm_info, gt_mat->shm_comm, 
-        &gt_mat->mat_block, &gt_mat->shm_win
+        shm_mb_bytes, unit_size, shm_info, gtm->shm_comm, 
+        &gtm->mat_block, &gtm->shm_win
     );
     MPI_Info_free(&shm_info);
     // (3) Get pointers of all processes in the shared memory communicator
     MPI_Aint _size;
     int _disp;
-    gt_mat->shm_mat_blocks = (void**) malloc(sizeof(void*) * gt_mat->shm_size);
-    if (gt_mat->shm_mat_blocks == NULL) return GTM_ALLOC_FAILED;
-    for (int i = 0; i < gt_mat->shm_size; i++)
-        MPI_Win_shared_query(gt_mat->shm_win, i, &_size, &_disp, &gt_mat->shm_mat_blocks[i]);
+    gtm->shm_mat_blocks = (void**) malloc(sizeof(void*) * gtm->shm_size);
+    if (gtm->shm_mat_blocks == NULL) return GTM_ALLOC_FAILED;
+    for (int i = 0; i < gtm->shm_size; i++)
+        MPI_Win_shared_query(gtm->shm_win, i, &_size, &_disp, &gtm->shm_mat_blocks[i]);
 
     // Bind local matrix block to global MPI window
     MPI_Info mpi_info;
     MPI_Info_create(&mpi_info);
-    int my_block_size = gt_mat->my_nrows * shm_max_ncol;
-    MPI_Win_create(gt_mat->mat_block, my_block_size * unit_size, unit_size, mpi_info, gt_mat->mpi_comm, &gt_mat->mpi_win);
-    //gt_mat->ld_blks = (int*) malloc(sizeof(int) * gt_mat->comm_size);
-    //assert(gt_mat->ld_blks != NULL);
-    //MPI_Allgather(&gt_mat->ld_local, 1, MPI_INT, gt_mat->ld_blks, 1, MPI_INT, gt_mat->mpi_comm);
+    int my_block_size = gtm->my_nrows * shm_max_ncol;
+    MPI_Win_create(gtm->mat_block, my_block_size * unit_size, unit_size, mpi_info, gtm->mpi_comm, &gtm->mpi_win);
+    //gtm->ld_blks = (int*) malloc(sizeof(int) * gtm->comm_size);
+    //assert(gtm->ld_blks != NULL);
+    //MPI_Allgather(&gtm->ld_local, 1, MPI_INT, gtm->ld_blks, 1, MPI_INT, gtm->mpi_comm);
     MPI_Info_free(&mpi_info);
     
     // Define small block data types
-    gt_mat->sb_stride   = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
-    gt_mat->sb_nostride = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
-    if (gt_mat->sb_stride   == NULL) return GTM_ALLOC_FAILED;
-    if (gt_mat->sb_nostride == NULL) return GTM_ALLOC_FAILED;
+    gtm->sb_stride   = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
+    gtm->sb_nostride = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
+    if (gtm->sb_stride   == NULL) return GTM_ALLOC_FAILED;
+    if (gtm->sb_nostride == NULL) return GTM_ALLOC_FAILED;
     for (int irow = 0; irow < MPI_DT_SB_DIM_MAX; irow++)
     {
         for (int icol = 0; icol < MPI_DT_SB_DIM_MAX; icol++)
@@ -133,107 +133,107 @@ int GTM_create(
             if (irow == 0 && icol == 0) 
             {
                 // Single element, use the original data type
-                MPI_Type_dup(datatype, &gt_mat->sb_stride[id]);
-                MPI_Type_dup(datatype, &gt_mat->sb_nostride[id]);
+                MPI_Type_dup(datatype, &gtm->sb_stride[id]);
+                MPI_Type_dup(datatype, &gtm->sb_nostride[id]);
             } else {
                 if (irow == 0)
                 {
                     // Only one row, use contiguous type
-                    MPI_Type_contiguous(icol + 1, datatype, &gt_mat->sb_stride[id]);
-                    MPI_Type_contiguous(icol + 1, datatype, &gt_mat->sb_nostride[id]);
+                    MPI_Type_contiguous(icol + 1, datatype, &gtm->sb_stride[id]);
+                    MPI_Type_contiguous(icol + 1, datatype, &gtm->sb_nostride[id]);
                 } else {
                     // More than 1 row, use vector type
-                    MPI_Type_vector(irow + 1, icol + 1, gt_mat->ld_local, datatype, &gt_mat->sb_stride[id]);
-                    MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &gt_mat->sb_nostride[id]);
+                    MPI_Type_vector(irow + 1, icol + 1, gtm->ld_local, datatype, &gtm->sb_stride[id]);
+                    MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &gtm->sb_nostride[id]);
                 }
             }
-            MPI_Type_commit(&gt_mat->sb_stride[id]);
-            MPI_Type_commit(&gt_mat->sb_nostride[id]);
+            MPI_Type_commit(&gtm->sb_stride[id]);
+            MPI_Type_commit(&gtm->sb_nostride[id]);
         }
     }
     
     // Allocate update request vector
-    gt_mat->req_vec = (GTM_Req_Vector_t*) malloc(gt_mat->comm_size * sizeof(GTM_Req_Vector_t));
-    if (gt_mat->req_vec == NULL) return GTM_ALLOC_FAILED;
-    for (int i = 0; i < gt_mat->comm_size; i++)
-        GTM_createReqVector(&gt_mat->req_vec[i]);
+    gtm->req_vec = (GTM_Req_Vector_t*) malloc(gtm->comm_size * sizeof(GTM_Req_Vector_t));
+    if (gtm->req_vec == NULL) return GTM_ALLOC_FAILED;
+    for (int i = 0; i < gtm->comm_size; i++)
+        GTM_createReqVector(&gtm->req_vec[i]);
     
     // Set up nonblocking access threshold
-    gt_mat->nb_op_proc_cnt = (int*) malloc(gt_mat->comm_size * sizeof(int));
-    if (gt_mat->nb_op_proc_cnt == NULL) return GTM_ALLOC_FAILED;;
-    memset(gt_mat->nb_op_proc_cnt, 0, gt_mat->comm_size * sizeof(int));
-    gt_mat->nb_op_cnt  = 0;
-    gt_mat->max_nb_acc = 8;
-    gt_mat->max_nb_get = 128;
+    gtm->nb_op_proc_cnt = (int*) malloc(gtm->comm_size * sizeof(int));
+    if (gtm->nb_op_proc_cnt == NULL) return GTM_ALLOC_FAILED;;
+    memset(gtm->nb_op_proc_cnt, 0, gtm->comm_size * sizeof(int));
+    gtm->nb_op_cnt  = 0;
+    gtm->max_nb_acc = 8;
+    gtm->max_nb_get = 128;
     char *max_nb_acc_p = getenv("GTM_MAX_NB_READ");
     char *max_nb_get_p = getenv("GTM_MAX_NB_UPDATE");
-    if (max_nb_acc_p != NULL) gt_mat->max_nb_acc = atoi(max_nb_acc_p);
-    if (max_nb_get_p != NULL) gt_mat->max_nb_get = atoi(max_nb_get_p);
-    if (gt_mat->max_nb_acc <    4) gt_mat->max_nb_acc =    4;
-    if (gt_mat->max_nb_acc > 1024) gt_mat->max_nb_acc = 1024;
-    if (gt_mat->max_nb_get <    4) gt_mat->max_nb_get =    4;
-    if (gt_mat->max_nb_get > 1024) gt_mat->max_nb_get = 1024;
+    if (max_nb_acc_p != NULL) gtm->max_nb_acc = atoi(max_nb_acc_p);
+    if (max_nb_get_p != NULL) gtm->max_nb_get = atoi(max_nb_get_p);
+    if (gtm->max_nb_acc <    4) gtm->max_nb_acc =    4;
+    if (gtm->max_nb_acc > 1024) gtm->max_nb_acc = 1024;
+    if (gtm->max_nb_get <    4) gtm->max_nb_get =    4;
+    if (gtm->max_nb_get > 1024) gtm->max_nb_get = 1024;
     
     // Set up MPI window lock type for update 
     // By default: (1) for accumulation, only element-wise atomicity is needed, use 
     // MPI_LOCK_SHARED; (2) for replacement, user should guarantee the write sequence 
     // and handle conflict, still use MPI_LOCK_SHARED. 
-    gt_mat->acc_lock_type = MPI_LOCK_SHARED;
+    gtm->acc_lock_type = MPI_LOCK_SHARED;
     char *acc_lock_type_p = getenv("GTM_UPDATE_ATOMICITY");
     if (acc_lock_type_p != NULL) 
     {
-        gt_mat->acc_lock_type = atoi(acc_lock_type_p);
-        switch (gt_mat->acc_lock_type)
+        gtm->acc_lock_type = atoi(acc_lock_type_p);
+        switch (gtm->acc_lock_type)
         {
-            case 1:  gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
-            case 2:  gt_mat->acc_lock_type = MPI_LOCK_EXCLUSIVE; break; 
-            default: gt_mat->acc_lock_type = MPI_LOCK_SHARED;    break; 
+            case 1:  gtm->acc_lock_type = MPI_LOCK_SHARED;    break; 
+            case 2:  gtm->acc_lock_type = MPI_LOCK_EXCLUSIVE; break; 
+            default: gtm->acc_lock_type = MPI_LOCK_SHARED;    break; 
         }
     }
     
-    *_gt_mat = gt_mat;
+    *_gtm = gtm;
     return GTM_SUCCESS;
 }
 
-int GTM_destroy(GTMatrix_t gt_mat)
+int GTM_destroy(GTMatrix_t gtm)
 {
-    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gtm == NULL) return GTM_NULL_PTR;
     
-    MPI_Win_free(&gt_mat->mpi_win);
-    MPI_Win_free(&gt_mat->shm_win);        // This will also free *mat_block
-    MPI_Comm_free(&gt_mat->mpi_comm);
-    MPI_Comm_free(&gt_mat->shm_comm);
+    MPI_Win_free(&gtm->mpi_win);
+    MPI_Win_free(&gtm->shm_win);        // This will also free *mat_block
+    MPI_Comm_free(&gtm->mpi_comm);
+    MPI_Comm_free(&gtm->shm_comm);
     
-    free(gt_mat->r_displs);
-    free(gt_mat->r_blklens);
-    free(gt_mat->c_displs);
-    free(gt_mat->c_blklens);
-    //free(gt_mat->mat_block);
-    //free(gt_mat->ld_blks);
-    free(gt_mat->symm_buf);
+    free(gtm->r_displs);
+    free(gtm->r_blklens);
+    free(gtm->c_displs);
+    free(gtm->c_blklens);
+    //free(gtm->mat_block);
+    //free(gtm->ld_blks);
+    free(gtm->symm_buf);
     
-    for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
+    for (int dst_rank = 0; dst_rank < gtm->comm_size; dst_rank++)
     {
-        if (gt_mat->nb_op_proc_cnt[dst_rank] != 0)
+        if (gtm->nb_op_proc_cnt[dst_rank] != 0)
         {
-            MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
-            gt_mat->nb_op_proc_cnt[dst_rank] = 0;
+            MPI_Win_unlock(dst_rank, gtm->mpi_win);
+            gtm->nb_op_proc_cnt[dst_rank] = 0;
         }
     }
-    free(gt_mat->nb_op_proc_cnt);
+    free(gtm->nb_op_proc_cnt);
     
     for (int i = 0; i < MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX; i++)
     {
-        MPI_Type_free(&gt_mat->sb_stride[i]);
-        MPI_Type_free(&gt_mat->sb_nostride[i]);
+        MPI_Type_free(&gtm->sb_stride[i]);
+        MPI_Type_free(&gtm->sb_nostride[i]);
     }
-    free(gt_mat->sb_stride);
-    free(gt_mat->sb_nostride);
+    free(gtm->sb_stride);
+    free(gtm->sb_nostride);
     
-    for (int i = 0; i < gt_mat->comm_size; i++)
-        GTM_destroyReqVector(gt_mat->req_vec[i]);
+    for (int i = 0; i < gtm->comm_size; i++)
+        GTM_destroyReqVector(gtm->req_vec[i]);
 
-    free(gt_mat);
+    free(gtm);
     
     return GTM_SUCCESS;
 }

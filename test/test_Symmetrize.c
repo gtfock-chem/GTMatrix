@@ -52,39 +52,39 @@ int main(int argc, char **argv)
     MPI_Comm comm_world;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_world);
     
-    GTMatrix_t gt_mat;
+    GTMatrix_t gtm;
     
     // 4 * 4 proc grid, matrix size 10 * 10
     GTM_create(
-        &gt_mat, comm_world, MPI_DOUBLE, 8, my_rank, 10, 10, 
+        &gtm, comm_world, MPI_DOUBLE, 8, my_rank, 10, 10, 
         4, 4, &r_displs[0], &c_displs[0]
     );
     
     // Set local data
     double d_fill = (double) (my_rank + 10);
-    GTM_fill(gt_mat, &d_fill);
+    GTM_fill(gtm, &d_fill);
     
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
     
     if (my_rank == ACTOR_RANK)
     {
-        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10);
+        GTM_getBlock(gtm, 0, 10, 0, 10, &mat[0], 10);
         print_double_mat(&mat[0], 10, 10, 10, "Initial matrix");
     }
     
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
     
     // Symmetrizing
-    GTM_symmetrize(gt_mat);
+    GTM_symmetrize(gtm);
     if (my_rank == ACTOR_RANK)
     {
-        GTM_getBlock(gt_mat, 0, 10, 0, 10, &mat[0], 10);
+        GTM_getBlock(gtm, 0, 10, 0, 10, &mat[0], 10);
         print_double_mat(&mat[0], 10, 10, 10, "Symmetrized matrix");
     }
     
-    GTM_sync(gt_mat);
+    GTM_sync(gtm);
     
-    GTM_destroy(gt_mat);
+    GTM_destroy(gtm);
     
     MPI_Finalize();
 }
