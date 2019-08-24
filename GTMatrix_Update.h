@@ -7,47 +7,34 @@
 // Notice: user should guarantee the write sequence is correct or write targets
 // do not overlap with each other when putting blocks of data. 
 
-// Put a block to the global matrix
-// Blocking call, the access operation is finished when function returns
-// This call is not collective, not thread-safe
-void GTM_putBlock(GTM_PARAM);
+// All functions in this header file are not collective, not thread-safe.
 
-// Accumulate a block to the global matrix
+// Put / accumulate a block to the global matrix
 // Blocking call, the access operation is finished when function returns
-// This call is not collective, not thread-safe
-void GTM_accumulateBlock(GTM_PARAM);
+int GTM_putBlock(GTM_PARAM);
+int GTM_accBlock(GTM_PARAM);
 
-// Nonblocking put a block to the global matrix
+// Nonblocking put / accumulate a block to the global matrix
 // Nonblocking call, the access operation is posted but not finished
-// This call is not collective, not thread-safe
-void GTM_putBlockNB(GTM_PARAM);
+int GTM_putBlockNB(GTM_PARAM);
+int GTM_accBlockNB(GTM_PARAM);
 
-// Nonblocking accumulate a block to the global matrix
-// Nonblocking call, the access operation is fposted but not finished
-// This call is not collective, not thread-safe
-void GTM_accumulateBlockNB(GTM_PARAM);
-
-// Add a request to put a block to the global matrix
+// Add a request to put / accumulate a block to the global matrix
 // Nonblocking call, the access operation is pushed to the request queue but not posted
-// This call is not collective, not thread-safe
-void GTM_addPutBlockRequest(GTM_PARAM);
-
-// Add a request to accumulate a block to the global matrix
-// Nonblocking call, the access operation is pushed to the request queue but not posted
-// This call is not collective, not thread-safe
-void GTM_addAccumulateBlockRequest(GTM_PARAM);
+int GTM_addPutBlockRequest(GTM_PARAM);
+int GTM_addAccBlockRequest(GTM_PARAM);
 
 // Start a batch update epoch and allow to submit update requests
-// This call is not collective, not thread-safe
-void GTM_startBatchUpdate(GTMatrix_t gt_mat);
+int GTM_startBatchPut(GTMatrix_t gt_mat);
+int GTM_startBatchAcc(GTMatrix_t gt_mat);
 
 // Execute all update requests in the queues
-// This call is not collective, not thread-safe
-void GTM_execBatchUpdate(GTMatrix_t gt_mat);
+int GTM_execBatchPut(GTMatrix_t gt_mat);
+int GTM_execBatchAcc(GTMatrix_t gt_mat);
 
 // Stop a batch update epoch and disallow to submit update requests
-// This call is not collective, not thread-safe
-void GTM_stopBatchUpdate(GTMatrix_t gt_mat);
+int GTM_stopBatchPut(GTMatrix_t gt_mat);
+int GTM_stopBatchAcc(GTMatrix_t gt_mat);
 
 
 #endif

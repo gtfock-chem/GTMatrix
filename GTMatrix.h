@@ -5,6 +5,9 @@
 extern "C" {
 #endif
 
+// GTMatrix returning values
+#include "GTMatrix_Retval.h"
+
 // GTMatrix structure definition, constructor and destructor 
 #include "GTMatrix_Typedef.h"
 

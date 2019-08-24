@@ -4,18 +4,19 @@
 #include <assert.h>
 #include <mpi.h>
 
+#include "GTMatrix_Retval.h"
 #include "GTMatrix_Typedef.h"
 #include "GTM_Req_Vector.h"
 #include "utils.h"
 
-void GTM_create(
+int GTM_create(
     GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
 )
 {
     GTMatrix_t gt_mat = (GTMatrix_t) malloc(sizeof(struct GTMatrix));
-    assert(gt_mat != NULL);
+    if (gt_mat == NULL) return GTM_ALLOC_FAILED;
     
     // Copy and validate matrix and process info
     int comm_size;
@@ -34,8 +35,9 @@ void GTM_create(
     gt_mat->my_rowblk = my_rank / c_blocks;
     gt_mat->my_colblk = my_rank % c_blocks;
     
-    gt_mat->is_batch_updating = 0;
-    gt_mat->is_batch_getting  = 0;
+    gt_mat->in_batch_get = 0;
+    gt_mat->in_batch_put = 0;
+    gt_mat->in_batch_acc = 0;
     
     // Allocate space for displacement arrays
     int r_displs_mem_size = sizeof(int) * (r_blocks + 1);
@@ -44,8 +46,11 @@ void GTM_create(
     gt_mat->c_displs  = (int*) malloc(c_displs_mem_size);
     gt_mat->r_blklens = (int*) malloc(sizeof(int) * r_blocks);
     gt_mat->c_blklens = (int*) malloc(sizeof(int) * c_blocks);
-    assert(gt_mat->r_displs  != NULL && gt_mat->c_displs  != NULL);
-    assert(gt_mat->r_blklens != NULL && gt_mat->c_blklens != NULL);
+    if ((gt_mat->r_displs  == NULL) || (gt_mat->c_displs  == NULL) ||
+        (gt_mat->r_blklens == NULL) || (gt_mat->c_blklens == NULL))
+    {
+        return GTM_ALLOC_FAILED;
+    }
     memcpy(gt_mat->r_displs, r_displs, r_displs_mem_size);
     memcpy(gt_mat->c_displs, c_displs, c_displs_mem_size);
     
@@ -65,16 +70,8 @@ void GTM_create(
         gt_mat->c_blklens[i] = c_displs[i + 1] - c_displs[i];
         if (gt_mat->c_blklens[i] <= 0) c_displs_valid = 0;
     }
-    if (r_displs_valid == 0 && my_rank == 0)
-    {
-        printf("[FATAL] GTMatrix: Invalid r_displs!\n");
-        assert(r_displs_valid == 1);
-    }
-    if (c_displs_valid == 0 && my_rank == 0)
-    {
-        printf("[FATAL] GTMatrix: Invalid c_displs!\n");
-        assert(c_displs_valid == 1);
-    }
+    if (r_displs_valid == 0) return GTM_INVALID_R_DISPLS;
+    if (c_displs_valid == 0) return GTM_INVALID_C_DISPLS;
     gt_mat->my_nrows = gt_mat->r_blklens[gt_mat->my_rowblk];
     gt_mat->my_ncols = gt_mat->c_blklens[gt_mat->my_colblk];
     // gt_mat->ld_local = gt_mat->my_ncols;
@@ -82,7 +79,7 @@ void GTM_create(
     MPI_Allreduce(&gt_mat->my_ncols, &gt_mat->ld_local, 1, MPI_INT, MPI_MAX, gt_mat->mpi_comm);
     
     gt_mat->symm_buf = malloc(unit_size * gt_mat->my_nrows * gt_mat->my_ncols);
-    assert(gt_mat->symm_buf != NULL);
+    if (gt_mat->symm_buf == NULL) return GTM_ALLOC_FAILED;
     
     // Allocate shared memory and its MPI window
     // (1) Split communicator to get shared memory communicator
@@ -90,7 +87,7 @@ void GTM_create(
     MPI_Comm_rank(gt_mat->shm_comm, &gt_mat->shm_rank);
     MPI_Comm_size(gt_mat->shm_comm, &gt_mat->shm_size);
     gt_mat->shm_global_ranks = (int*) malloc(sizeof(int) * gt_mat->shm_size);
-    assert(gt_mat->shm_global_ranks != NULL);
+    if (gt_mat->shm_global_ranks == NULL) return GTM_ALLOC_FAILED;
     MPI_Allgather(&gt_mat->my_rank, 1, MPI_INT, gt_mat->shm_global_ranks, 1, MPI_INT, gt_mat->shm_comm);
     // (2) Allocate shared memory 
     int shm_max_nrow, shm_max_ncol, shm_mb_bytes;
@@ -109,7 +106,7 @@ void GTM_create(
     MPI_Aint _size;
     int _disp;
     gt_mat->shm_mat_blocks = (void**) malloc(sizeof(void*) * gt_mat->shm_size);
-    assert(gt_mat->shm_mat_blocks != NULL);
+    if (gt_mat->shm_mat_blocks == NULL) return GTM_ALLOC_FAILED;
     for (int i = 0; i < gt_mat->shm_size; i++)
         MPI_Win_shared_query(gt_mat->shm_win, i, &_size, &_disp, &gt_mat->shm_mat_blocks[i]);
 
@@ -126,7 +123,8 @@ void GTM_create(
     // Define small block data types
     gt_mat->sb_stride   = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
     gt_mat->sb_nostride = (MPI_Datatype*) malloc(sizeof(MPI_Datatype) * MPI_DT_SB_DIM_MAX * MPI_DT_SB_DIM_MAX);
-    assert(gt_mat->sb_stride != NULL && gt_mat->sb_nostride != NULL);
+    if (gt_mat->sb_stride   == NULL) return GTM_ALLOC_FAILED;
+    if (gt_mat->sb_nostride == NULL) return GTM_ALLOC_FAILED;
     for (int irow = 0; irow < MPI_DT_SB_DIM_MAX; irow++)
     {
         for (int icol = 0; icol < MPI_DT_SB_DIM_MAX; icol++)
@@ -156,12 +154,13 @@ void GTM_create(
     
     // Allocate update request vector
     gt_mat->req_vec = (GTM_Req_Vector_t*) malloc(gt_mat->comm_size * sizeof(GTM_Req_Vector_t));
+    if (gt_mat->req_vec == NULL) return GTM_ALLOC_FAILED;
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_createReqVector(&gt_mat->req_vec[i]);
     
     // Set up nonblocking access threshold
     gt_mat->nb_op_proc_cnt = (int*) malloc(gt_mat->comm_size * sizeof(int));
-    assert(gt_mat->nb_op_proc_cnt != NULL);
+    if (gt_mat->nb_op_proc_cnt == NULL) return GTM_ALLOC_FAILED;;
     memset(gt_mat->nb_op_proc_cnt, 0, gt_mat->comm_size * sizeof(int));
     gt_mat->nb_op_cnt  = 0;
     gt_mat->max_nb_acc = 8;
@@ -193,11 +192,12 @@ void GTM_create(
     }
     
     *_gt_mat = gt_mat;
+    return GTM_SUCCESS;
 }
 
-void GTM_destroy(GTMatrix_t gt_mat)
+int GTM_destroy(GTMatrix_t gt_mat)
 {
-    assert(gt_mat != NULL);
+    if (gt_mat == NULL) return GTM_NULL_PTR;
     
     MPI_Win_free(&gt_mat->mpi_win);
     MPI_Win_free(&gt_mat->shm_win);        // This will also free *mat_block
@@ -234,4 +234,6 @@ void GTM_destroy(GTMatrix_t gt_mat)
         GTM_destroyReqVector(gt_mat->req_vec[i]);
 
     free(gt_mat);
+    
+    return GTM_SUCCESS;
 }

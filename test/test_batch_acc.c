@@ -56,15 +56,15 @@ int main(int argc, char **argv)
 
     if (my_rank < ACCU_RANK)
     {
-        GTM_startBatchUpdate(gt_mat);
+        GTM_startBatchAcc(gt_mat);
         for (int irow = 0; irow < 8; irow++)
-            GTM_addAccumulateBlockRequest(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
+            GTM_addAccBlockRequest(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
         printf("Rank %d add requests done\n", my_rank);
-        GTM_execBatchUpdate(gt_mat);
-        GTM_stopBatchUpdate(gt_mat);
+        GTM_execBatchAcc(gt_mat);
+        GTM_stopBatchAcc(gt_mat);
         
         //for (int irow = 0; irow < 8; irow++)
-        //    GTM_accumulateBlock(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
+        //    GTM_accBlock(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
     }
     
     // Wait all process to finish their update

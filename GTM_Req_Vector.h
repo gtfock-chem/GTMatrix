@@ -17,17 +17,17 @@ typedef struct GTM_Req_Vector* GTM_Req_Vector_t;
 
 #define DEFAULT_REQ_VEC_LEN 128
 
-void GTM_createReqVector(GTM_Req_Vector_t *gtm_rv_);
+int GTM_createReqVector(GTM_Req_Vector_t *gtm_rv_);
 
-void GTM_pushToReqVector(
+int GTM_pushToReqVector(
     GTM_Req_Vector_t gtm_rv, MPI_Op op, 
     int row_start, int row_num,
     int col_start, int col_num,
     void *src_buf, int src_buf_ld
 );
 
-void GTM_resetReqVector(GTM_Req_Vector_t gtm_rv);
+int GTM_resetReqVector(GTM_Req_Vector_t gtm_rv);
 
-void GTM_destroyReqVector(GTM_Req_Vector_t gtm_rv);
+int GTM_destroyReqVector(GTM_Req_Vector_t gtm_rv);
 
 #endif

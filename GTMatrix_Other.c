@@ -4,12 +4,14 @@
 #include <assert.h>
 #include <mpi.h>
 
+#include "GTMatrix_Retval.h"
 #include "GTMatrix_Typedef.h"
 #include "GTMatrix_Get.h"
 #include "GTMatrix_Other.h"
 
-void GTM_sync(GTMatrix_t gt_mat)
+int GTM_sync(GTMatrix_t gt_mat)
 {
+    if (gt_mat == NULL) return GTM_NULL_PTR;
     if (SYNC_IBARRIER == 1)
     {
         // Observed that on some Skylake & KNL machine with IMPI 17, when not all
@@ -23,10 +25,12 @@ void GTM_sync(GTMatrix_t gt_mat)
     } else {
         MPI_Barrier(gt_mat->mpi_comm);
     }
+    return GTM_SUCCESS;
 }
 
-void GTM_waitNB(GTMatrix_t gt_mat)
+int GTM_waitNB(GTMatrix_t gt_mat)
 {
+    if (gt_mat == NULL) return GTM_NULL_PTR;
     for (int dst_rank = 0; dst_rank < gt_mat->comm_size; dst_rank++)
     {
         if (gt_mat->nb_op_proc_cnt[dst_rank] != 0)
@@ -36,10 +40,12 @@ void GTM_waitNB(GTMatrix_t gt_mat)
         }
     }
     gt_mat->nb_op_cnt = 0;
+    return GTM_SUCCESS;
 }
 
-void GTM_fill(GTMatrix_t gt_mat, void *value)
+int GTM_fill(GTMatrix_t gt_mat, void *value)
 {
+    if (gt_mat == NULL) return GTM_NULL_PTR;
     if (gt_mat->unit_size == 4)
     {
         int _value, *ptr;
@@ -60,12 +66,13 @@ void GTM_fill(GTMatrix_t gt_mat, void *value)
             for (int j = 0; j < gt_mat->my_ncols; j++) 
                 ptr[i * gt_mat->ld_local + j] = _value;
     }
+    return GTM_SUCCESS;
 }
 
-void GTM_symmetrize(GTMatrix_t gt_mat)
+int GTM_symmetrize(GTMatrix_t gt_mat)
 {
-    // Sanity check
-    if (gt_mat->nrows != gt_mat->ncols) return;
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gt_mat->nrows != gt_mat->ncols) return GTM_NOT_SQUARE_MAT;
     
     // This process holds [rs:re, cs:ce], need to fetch [cs:ce, rs:re]
     void *rcv_buf = gt_mat->symm_buf;
@@ -117,5 +124,5 @@ void GTM_symmetrize(GTMatrix_t gt_mat)
         }
     }
     
-    GTM_sync(gt_mat);
+    return GTM_sync(gt_mat);
 }

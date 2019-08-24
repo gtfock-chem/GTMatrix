@@ -4,21 +4,25 @@
 #include <assert.h>
 #include <mpi.h>
 
-#include "GTMatrix.h"
+#include "GTMatrix_Retval.h"
+#include "GTMatrix_Typedef.h"
+#include "GTMatrix_Update.h"
+#include "GTMatrix_Other.h"
 #include "utils.h"
 
 // Update (put or accumulate) a block to a process using MPI_Accumulate
 // The update operation is not complete when this function returns
-// [in] gt_mat     : GTMatrix handle
-// [in] dst_rank   : Target process
-// [in] op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
-// [in] row_start  : 1st row of the source block
-// [in] row_num    : Number of rows the source block has
-// [in] col_start  : 1st column of the source block
-// [in] col_num    : Number of columns the source block has
-// [in] *src_buf   : Source buffer
-// [in] src_buf_ld : Leading dimension of the source buffer
-void GTM_updateBlockToProcess(
+// Input parameters:
+//   gt_mat     : GTMatrix handle
+//   dst_rank   : Target process
+//   op         : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (put)
+//   row_start  : 1st row of the source block
+//   row_num    : Number of rows the source block has
+//   col_start  : 1st column of the source block
+//   col_num    : Number of columns the source block has
+//   *src_buf   : Source buffer
+//   src_buf_ld : Leading dimension of the source buffer
+int GTM_updateBlockToProcess(
     GTMatrix_t gt_mat, int dst_rank, MPI_Op op, 
     int row_start, int row_num,
     int col_start, int col_num,
@@ -40,7 +44,7 @@ void GTM_updateBlockToProcess(
         (col_start < dst_col_start) ||
         (row_end   > dst_row_end)   ||
         (col_end   > dst_col_end)   ||
-        (row_num   * col_num == 0)) return;
+        (row_num   * col_num == 0)) return GTM_INVALID_BLOCK;
     
     char *src_ptr = (char*) src_buf;
     int row_bytes = col_num * gt_mat->unit_size;
@@ -81,20 +85,22 @@ void GTM_updateBlockToProcess(
         MPI_Type_free(&dst_dt);
         MPI_Type_free(&rcv_dt);
     }
+    return GTM_SUCCESS;
 }
 
 // Update (put or accumulate) a block to all related processes using MPI_Accumulate
 // This call is not collective, not thread-safe
-// [in] gt_mat      : GTMatrix handle
-// [in] op          : MPI operation, only support MPI_SUM (accumulate) and MPI_REPLACE (MPI_Put)
-// [in] row_start   : 1st row of the source block
-// [in] row_num     : Number of rows the source block has
-// [in] col_start   : 1st column of the source block
-// [in] col_num     : Number of columns the source block has
-// [in] *src_buf    : Source buffer
-// [in] src_buf_ld  : Leading dimension of the source buffer
-// [in] access_mode : Access mode, see GTMatrix_Typedef.h
-void GTM_updateBlock(
+// Input parameters:
+//   gt_mat      : GTMatrix handle
+//   op          : MPI operation, only support MPI_SUM (acc) and MPI_REPLACE (put)
+//   row_start   : 1st row of the source block
+//   row_num     : Number of rows the source block has
+//   col_start   : 1st column of the source block
+//   col_num     : Number of columns the source block has
+//   *src_buf    : Source buffer
+//   src_buf_ld  : Leading dimension of the source buffer
+//   access_mode : Access mode, see GTMatrix_Typedef.h
+int GTM_updateBlock(
     GTMatrix_t gt_mat, MPI_Op op, 
     int row_start, int row_num,
     int col_start, int col_num,
@@ -102,11 +108,11 @@ void GTM_updateBlock(
     int access_mode
 )
 {
-    // Sanity check
+    if (gt_mat == NULL) return GTM_NULL_PTR;
     if ((row_start < 0) || (col_start < 0) ||
         (row_start + row_num > gt_mat->nrows)  ||
         (col_start + col_num > gt_mat->ncols)  ||
-        (row_num * col_num == 0)) return;
+        (row_num * col_num == 0)) return GTM_INVALID_BLOCK;
     
     // Find the processes that contain the requested block
     int s_blk_r, e_blk_r, s_blk_c, e_blk_c;
@@ -151,10 +157,12 @@ void GTM_updateBlock(
             char *blk_ptr = (char*) src_buf;
             blk_ptr += (row_dist * src_buf_ld + col_dist) * gt_mat->unit_size;
             
+            int ret = MPI_SUCCESS;
+            
             if (access_mode == BLOCKING_ACCESS)
             {
                 MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
-                GTM_updateBlockToProcess(
+                ret = GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
@@ -166,109 +174,51 @@ void GTM_updateBlock(
                 if (gt_mat->nb_op_proc_cnt[dst_rank] == 0)
                     MPI_Win_lock(gt_mat->acc_lock_type, dst_rank, 0, gt_mat->mpi_win);
                 
-                GTM_updateBlockToProcess(
+                ret = GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
                 
                 gt_mat->nb_op_proc_cnt[dst_rank]++;
                 gt_mat->nb_op_cnt++;
-                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_acc)
-                    GTM_waitNB(gt_mat);
+                if (gt_mat->nb_op_cnt >= gt_mat->max_nb_acc) GTM_waitNB(gt_mat);
             }
             
             if (access_mode == BATCH_ACCESS)
             {
                 GTM_Req_Vector_t req_vec = gt_mat->req_vec[dst_rank];
-                GTM_pushToReqVector(
+                ret = GTM_pushToReqVector(
                     req_vec, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
             }
+            
+            if (ret != GTM_SUCCESS) return ret;
         }
     }
-}
-
-// Put a block to the global matrix
-void GTM_putBlock(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_REPLACE, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, BLOCKING_ACCESS
-    );
-}
-
-// Accumulate a block to the global matrix
-void GTM_accumulateBlock(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_SUM, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, BLOCKING_ACCESS
-    );
-}
-
-// Nonblocking put a block to the global matrix
-void GTM_putBlockNB(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_REPLACE, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, NONBLOCKING_ACCESS
-    );
-}
-
-// Accumulate a block to the global matrix
-void GTM_accumulateBlockNB(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_SUM, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, NONBLOCKING_ACCESS
-    );
-}
-
-// Add a request to put a block to the global matrix
-void GTM_addPutBlockRequest(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_REPLACE, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, BATCH_ACCESS
-    );
-}
-
-// Add a request to accumulate a block to the global matrix
-void GTM_addAccumulateBlockRequest(GTM_PARAM)
-{
-    GTM_updateBlock(
-        gt_mat, MPI_SUM, 
-        row_start, row_num,
-        col_start, col_num,
-        src_buf, src_buf_ld, BATCH_ACCESS
-    );
+    return GTM_SUCCESS;
 }
 
 // Start a batch update epoch and allow to submit update requests
-void GTM_startBatchUpdate(GTMatrix_t gt_mat)
+int GTM_startBatchUpdate(GTMatrix_t gt_mat)
 {
-    if (gt_mat->is_batch_getting) return;
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gt_mat->in_batch_get) return GTM_IN_BATCHED_GET;
+    if (gt_mat->in_batch_put) return GTM_IN_BATCHED_PUT;
+    if (gt_mat->in_batch_acc) return GTM_IN_BATCHED_ACC;
     
     for (int i = 0; i < gt_mat->comm_size; i++)
         GTM_resetReqVector(gt_mat->req_vec[i]);
-    gt_mat->is_batch_updating = 1;
+    gt_mat->in_batch_put = 1;
+    gt_mat->in_batch_acc = 1;
+    return GTM_SUCCESS;
 }
 
 // Execute all update requests in the queues
-void GTM_execBatchUpdate(GTMatrix_t gt_mat)
+int GTM_execBatchUpdate(GTMatrix_t gt_mat)
 {
-    if (gt_mat->is_batch_updating == 0) return;
+    if (gt_mat->in_batch_put == 0) return GTM_NO_BATCHED_PUT;
+    if (gt_mat->in_batch_acc == 0) return GTM_NO_BATCHED_ACC;
     
     for (int _dst_rank = gt_mat->my_rank; _dst_rank < gt_mat->comm_size + gt_mat->my_rank; _dst_rank++)
     {    
@@ -287,21 +237,125 @@ void GTM_execBatchUpdate(GTMatrix_t gt_mat)
                 int blk_c_num  = req_vec->col_nums[i];
                 void *blk_ptr  = req_vec->src_bufs[i];
                 int src_buf_ld = req_vec->src_buf_lds[i];
-                GTM_updateBlockToProcess(
+                int ret = GTM_updateBlockToProcess(
                     gt_mat, dst_rank, op, blk_r_s, blk_r_num, 
                     blk_c_s, blk_c_num, blk_ptr, src_buf_ld
                 );
+                if (ret != GTM_SUCCESS) return ret;
             }
             MPI_Win_unlock(dst_rank, gt_mat->mpi_win);
         }
         
         GTM_resetReqVector(req_vec);
     }
+    return GTM_SUCCESS;
 }
 
 // Stop a batch update epoch and disallow to submit update requests
-void GTM_stopBatchUpdate(GTMatrix_t gt_mat)
+int GTM_stopBatchUpdate(GTMatrix_t gt_mat)
 {
-    if (gt_mat->is_batch_updating == 0) return;
-    gt_mat->is_batch_updating = 0;
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    if (gt_mat->in_batch_put == 0) return GTM_NO_BATCHED_PUT;
+    if (gt_mat->in_batch_acc == 0) return GTM_NO_BATCHED_ACC;
+    gt_mat->in_batch_put = 0;
+    gt_mat->in_batch_acc = 0;
+    return GTM_SUCCESS;
+}
+
+// ========== Below are wrapper functions ========== //
+
+// Put / accumulate a block to the global matrix
+int GTM_putBlock(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_REPLACE, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, BLOCKING_ACCESS
+    );
+}
+int GTM_accBlock(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_SUM, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, BLOCKING_ACCESS
+    );
+}
+
+// Nonblocking put / accumulate a block to the global matrix
+int GTM_putBlockNB(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_REPLACE, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
+    );
+}
+int GTM_accBlockNB(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_SUM, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, NONBLOCKING_ACCESS
+    );
+}
+
+// Add a request to put / accumulate a block to the global matrix
+int GTM_addPutBlockRequest(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_REPLACE, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, BATCH_ACCESS
+    );
+}
+int GTM_addAccBlockRequest(GTM_PARAM)
+{
+    if (gt_mat == NULL) return GTM_NULL_PTR;
+    return GTM_updateBlock(
+        gt_mat, MPI_SUM, 
+        row_start, row_num,
+        col_start, col_num,
+        src_buf, src_buf_ld, BATCH_ACCESS
+    );
+}
+
+// Start a batch put / accumulate epoch and allow to submit put requests
+int GTM_startBatchPut(GTMatrix_t gt_mat)
+{
+    return GTM_startBatchUpdate(gt_mat);
+}
+int GTM_startBatchAcc(GTMatrix_t gt_mat)
+{
+    return GTM_startBatchUpdate(gt_mat);
+}
+
+// Execute all put / accumulate requests in the queues
+int GTM_execBatchPut(GTMatrix_t gt_mat)
+{
+    return GTM_execBatchUpdate(gt_mat);
+}
+int GTM_execBatchAcc(GTMatrix_t gt_mat)
+{
+    return GTM_execBatchUpdate(gt_mat);
+}
+
+// Stop a batch put / accumulate epoch and disallow to submit update requests
+int GTM_stopBatchPut(GTMatrix_t gt_mat)
+{
+    return GTM_stopBatchUpdate(gt_mat);
+}
+int GTM_stopBatchAcc(GTMatrix_t gt_mat)
+{
+    return GTM_stopBatchUpdate(gt_mat);
 }

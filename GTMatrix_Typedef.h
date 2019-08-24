@@ -29,8 +29,9 @@ struct GTMatrix
     void *mat_block;             // Local matrix block
     void *symm_buf;              // Buffer for symmetrization
     GTM_Req_Vector_t *req_vec;   // Update requests for each process
-    int is_batch_updating;       // If we can submit update request
-    int is_batch_getting;        // If we can submit get request
+    int in_batch_get;            // If GTMatrix is in batched get access
+    int in_batch_put;            // If GTMatrix is in batched put access
+    int in_batch_acc;            // If GTMatrix is in batched acc access
     int *nb_op_proc_cnt;         // Number of outstanding RMA operations on each process from nonblocking calls
     int nb_op_cnt;               // Total number of outstanding RMA operations from nonblocking calls
     int max_nb_acc, max_nb_get;  // Maximum number of outstanding update / get operations from nonblocking calls
@@ -68,18 +69,20 @@ typedef struct GTMatrix* GTMatrix_t;
 // Create and initialize a GTMatrix structure
 // Each process has one matrix block, process ranks are arranged in row-major style
 // This call is collective, thread-safe
-// [out] gt_mat     : Return pointer to the created GTMatrix structure
-// [in]  comm       : MPI communicator used in this distributed matrix
-// [in]  datatype   : Matrix data type
-// [in]  unit_size  : Size of matrix data type, unit is byte
-// [in]  my_rank    : MPI Rank of this process
-// [in]  nrows      : Number of rows in matrix 
-// [in]  ncols      : Number of columns in matrix
-// [in]  r_blocks   : Number of blocks on row direction
-// [in]  c_blocks   : Number of blocks on column direction
-// [in]  *r_displs  : Row direction displacement array, nrows+1 elements
-// [in]  *c_displs  : Column direction displacement array, ncols+1 elements
-void GTM_create(
+// Input parameters:
+//   comm      : MPI communicator used in this distributed matrix
+//   datatype  : Matrix data type
+//   unit_size : Size of matrix data type, unit is byte
+//   my_rank   : MPI Rank of this process
+//   nrows     : Number of rows in matrix 
+//   ncols     : Number of columns in matrix
+//   r_blocks  : Number of blocks on row direction
+//   c_blocks  : Number of blocks on column direction
+//   *r_displs : Row direction displacement array, nrows+1 elements
+//   *c_displs : Column direction displacement array, ncols+1 elements
+// Output parameter:
+//   *_gt_mat : Pointer to the created GTMatrix structure
+int GTM_create(
     GTMatrix_t *_gt_mat, MPI_Comm comm, MPI_Datatype datatype,
     int unit_size, int my_rank, int nrows, int ncols,
     int r_blocks, int c_blocks, int *r_displs, int *c_displs
@@ -87,6 +90,6 @@ void GTM_create(
 
 // Free a GTMatrix structure
 // This call is collective, thread-safe
-void GTM_destroy(GTMatrix_t gt_mat);
+int GTM_destroy(GTMatrix_t gt_mat);
 
 #endif

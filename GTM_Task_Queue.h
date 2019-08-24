@@ -13,22 +13,28 @@ typedef struct GTM_Task_Queue* GTM_Task_Queue_t;
 
 // Create and initialize a GTM_Task_Queue structure
 // This call is collective, thread-safe
-// [in] comm : MPI communicator used in this distributed task queue
-void GTM_createTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm);
+// Input parameter:
+//   comm : MPI communicator used in this distributed task queue
+// Output paramater:
+//   _gtm_tq : Pointer to a initialized GTM_Task_Queue structure
+int GTM_createTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm);
 
 // Free a GTM_Task_Queue structure
 // This call is collective, thread-safe
-void GTM_destroyTaskQueue(GTM_Task_Queue_t gtm_tq);
+int GTM_destroyTaskQueue(GTM_Task_Queue_t gtm_tq);
 
 // Free counter in a GTM_Task_Queue structure
 // This call is collective, thread-safe
-void GTM_resetTaskQueue(GTM_Task_Queue_t gtm_tq);
+int GTM_resetTaskQueue(GTM_Task_Queue_t gtm_tq);
 
 // Read and then increment the task_counter value on the given process
 // This call is not collective, thread-safe
-// [in] dst_rank : Target process rank
-// [in] ntasks   : Number of tasks to get
-// [out ]@return : The task_counter value before incremention
+// Input parameter:
+//   dst_rank : Target process rank
+//   ntasks   : Number of tasks to get
+// Output paramater:
+//   @return : The task_counter value before incremention.
+//             If the operation is invalid, the returning value will be negative.
 int GTM_getNextTasks(GTM_Task_Queue_t gtm_tq, int dst_rank, int ntasks);
 
 #endif

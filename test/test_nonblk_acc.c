@@ -57,7 +57,7 @@ int main(int argc, char **argv)
     if (my_rank < ACCU_RANK)
     {
         for (int irow = 0; irow < 8; irow++)
-            GTM_accumulateBlockNB(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
+            GTM_accBlockNB(gt_mat, irow, 1, 0, 8, &mat[irow * 8], 8);
         GTM_waitNB(gt_mat);
     }
     
