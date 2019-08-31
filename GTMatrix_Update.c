@@ -46,12 +46,9 @@ int GTM_updateBlockToProcess(
         (col_end   > dst_col_end)   ||
         (row_num   * col_num == 0)) return GTM_INVALID_BLOCK;
     
-    char *src_ptr = (char*) src_buf;
-    int row_bytes = col_num * gtm->unit_size;
     int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
     dst_pos += col_start - dst_col_start;
 
-    int src_ptr_ld = src_buf_ld * gtm->unit_size;
     if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
     {
         // Block is small, use predefined data type or define a new 
@@ -61,16 +58,16 @@ int GTM_updateBlockToProcess(
         if (col_num == src_buf_ld)
         {
             MPI_Datatype *rcv_dt_ns = &gtm->sb_nostride[block_dt_id];
-            MPI_Accumulate(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
+            MPI_Accumulate(src_buf, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
         } else {
             if (gtm->ld_local == src_buf_ld)
             {
-                MPI_Accumulate(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
+                MPI_Accumulate(src_buf, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
             } else {
                 MPI_Datatype rcv_dt;
                 MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
                 MPI_Type_commit(&rcv_dt);
-                MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
+                MPI_Accumulate(src_buf, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, op, gtm->mpi_win);
                 MPI_Type_free(&rcv_dt);
             }
         }
@@ -81,7 +78,7 @@ int GTM_updateBlockToProcess(
         MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
         MPI_Type_commit(&dst_dt);
         MPI_Type_commit(&rcv_dt);
-        MPI_Accumulate(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, op, gtm->mpi_win);
+        MPI_Accumulate(src_buf, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, op, gtm->mpi_win);
         MPI_Type_free(&dst_dt);
         MPI_Type_free(&rcv_dt);
     }

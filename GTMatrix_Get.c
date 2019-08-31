@@ -51,27 +51,26 @@ int GTM_getBlockFromProcess(
     // Check if the target process is in the shared memory communicator
     int shm_rank  = getElementIndexInArray(dst_rank, gtm->shm_global_ranks, gtm->shm_size);
     void *shm_ptr = (shm_rank == -1) ? NULL : gtm->shm_mat_blocks[shm_rank];
-    
-    char *src_ptr = (char*) src_buf;
-    int row_bytes = col_num * gtm->unit_size;
+
+    size_t row_msize = (size_t)col_num * (size_t)gtm->unit_size;
     int dst_pos = (row_start - dst_row_start) * dst_blk_ld;
     dst_pos += col_start - dst_col_start;
 
     if (shm_rank != -1)
     {
         // Target process and current process is in same node, use memcpy
-        char *dst_ptr  = shm_ptr + dst_pos * gtm->unit_size;
+        char *src_ptr  = (char*) src_buf;
+        char *dst_ptr  = (char*) shm_ptr + dst_pos * gtm->unit_size;
         int src_ptr_ld = src_buf_ld * gtm->unit_size;
         int dst_ptr_ld = dst_blk_ld * gtm->unit_size;
         for (int irow = 0; irow < row_num; irow++)
         {
-            memcpy(src_ptr, dst_ptr, row_bytes);
+            memcpy(src_ptr, dst_ptr, row_msize);
             src_ptr += src_ptr_ld;
             dst_ptr += dst_ptr_ld;
         }
     } else {
         // Target process and current process isn't in same node, use MPI_Get
-        int src_ptr_ld = src_buf_ld * gtm->unit_size;
         if (row_num <= MPI_DT_SB_DIM_MAX && col_num <= MPI_DT_SB_DIM_MAX)  
         {
             // Block is small, use predefined data type or define a new 
@@ -81,16 +80,16 @@ int GTM_getBlockFromProcess(
             if (col_num == src_buf_ld)
             {
                 MPI_Datatype *rcv_dt_ns = &gtm->sb_nostride[block_dt_id];
-                MPI_Get(src_ptr, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
+                MPI_Get(src_buf, 1, *rcv_dt_ns, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
             } else {
                 if (gtm->ld_local == src_buf_ld)
                 {
-                    MPI_Get(src_ptr, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
+                    MPI_Get(src_buf, 1, *dst_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
                 } else {
                     MPI_Datatype rcv_dt;
                     MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
                     MPI_Type_commit(&rcv_dt);
-                    MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
+                    MPI_Get(src_buf, 1, rcv_dt, dst_rank, dst_pos, 1, *dst_dt, gtm->mpi_win);
                     MPI_Type_free(&rcv_dt);
                 }
             }
@@ -101,7 +100,7 @@ int GTM_getBlockFromProcess(
             MPI_Type_vector(row_num, col_num, src_buf_ld, gtm->datatype, &rcv_dt);
             MPI_Type_commit(&dst_dt);
             MPI_Type_commit(&rcv_dt);
-            MPI_Get(src_ptr, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, gtm->mpi_win);
+            MPI_Get(src_buf, 1, rcv_dt, dst_rank, dst_pos, 1, dst_dt, gtm->mpi_win);
             MPI_Type_free(&dst_dt);
             MPI_Type_free(&rcv_dt);
         }

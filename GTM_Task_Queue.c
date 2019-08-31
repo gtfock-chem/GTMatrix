@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L  // For posix_memalign
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
