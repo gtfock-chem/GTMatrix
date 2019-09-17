@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <mpi.h>
+#include <complex.h>
 
 #include "GTMatrix_Retval.h"
 #include "GTMatrix_Typedef.h"
@@ -70,6 +71,18 @@ int GTM_fill(GTMatrix_t gtm, void *value)
                 ptr[offset_i + j] = _value;
         }
     }
+    if (gtm->unit_size == 16)
+    {
+        double _Complex _value, *ptr;
+        memcpy(&_value, value, 16);
+        ptr = (double _Complex*) gtm->mat_block;
+        for (int i = 0; i < gtm->my_nrows; i++)
+        {
+            int offset_i = i * gtm->ld_local;
+            for (int j = 0; j < gtm->my_ncols; j++) 
+                ptr[offset_i + j] = _value;
+        }
+    }
     return GTM_SUCCESS;
 }
 
@@ -122,6 +135,21 @@ int GTM_symmetrize(GTMatrix_t gtm)
                 int idx_s = irow * gtm->ld_local + icol;
                 int idx_d = icol * gtm->my_nrows + irow;
                 src_buf[idx_s] += dst_buf[idx_d];
+                src_buf[idx_s] *= 0.5;
+            }
+        }
+    }
+    if (MPI_C_DOUBLE_COMPLEX == gtm->datatype)
+    {
+        double _Complex *src_buf = (double _Complex*) gtm->mat_block;
+        double _Complex *dst_buf = (double _Complex*) rcv_buf;
+        for (int irow = 0; irow < gtm->my_nrows; irow++)
+        {
+            for (int icol = 0; icol < gtm->my_ncols; icol++)
+            {
+                int idx_s = irow * gtm->ld_local + icol;
+                int idx_d = icol * gtm->my_nrows + irow;
+                src_buf[idx_s] += conj(dst_buf[idx_d]);
                 src_buf[idx_s] *= 0.5;
             }
         }

@@ -145,7 +145,7 @@ int GTM_create(
                 } else {
                     // More than 1 row, use vector type
                     MPI_Type_vector(irow + 1, icol + 1, gtm->ld_local, datatype, &gtm->sb_stride[id]);
-                    MPI_Type_vector(irow + 1, icol + 1,     icol + 1, datatype, &gtm->sb_nostride[id]);
+                    MPI_Type_vector(irow + 1, icol + 1,      icol + 1, datatype, &gtm->sb_nostride[id]);
                 }
             }
             MPI_Type_commit(&gtm->sb_stride[id]);
