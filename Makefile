@@ -1,14 +1,13 @@
 LIB     = libGTMatrix.a
-MPICC   = mpiicc
-CFLAGS  = -Wall -Wunused-variable -g -O3 -qopenmp -std=c99 
-LDFLAGS = -qopenmp
-AR      = xiar rcs
+MPICC   ?= mpiicc
+CFLAGS  = -Wall -Wunused-variable -g -O3 -std=c99
+AR      ?= xiar
 
 OBJS = GTMatrix_Typedef.o GTMatrix_Get.o GTMatrix_Update.o      \
        GTMatrix_Other.o GTM_Req_Vector.o GTM_Task_Queue.o utils.o 
 
 $(LIB): $(OBJS) 
-	${AR} $@ $^
+	${AR} rcs $@ $^
 	
 GTMatrix_Typedef.o: Makefile GTMatrix_Typedef.h GTMatrix_Typedef.c 
 	$(MPICC) ${CFLAGS} -c GTMatrix_Typedef.c -o $@ 

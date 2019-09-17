@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     {
         for (int i = 0; i < 64; i++) mat[i] = -1;
         GTM_getBlock(gtm, 0, 8, 0, 8, &mat[0], 8);
-        print_int_mat(&mat[0], 8, 8, 8, "Updated matrix");
+        print_int_mat(&mat[0], 8, 8, 8, "Updated matrix (should be all 45)");
     }
     
     GTM_sync(gtm);

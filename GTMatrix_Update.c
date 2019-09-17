@@ -112,7 +112,8 @@ int GTM_updateBlock(
         (row_num * col_num == 0)) return GTM_INVALID_BLOCK;
     
     // Find the processes that contain the requested block
-    int s_blk_r, e_blk_r, s_blk_c, e_blk_c;
+    // No need to initialize, just to avoid compiler warning
+    int s_blk_r = 0, e_blk_r = -1, s_blk_c = 0, e_blk_c = -1;  
     int row_end = row_start + row_num - 1;
     int col_end = col_start + col_num - 1;
     for (int i = 0; i < gtm->r_blocks; i++)

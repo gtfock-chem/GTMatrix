@@ -21,8 +21,8 @@ int GTM_createTaskQueue(GTM_Task_Queue_t *_gtm_tq, MPI_Comm comm)
 
     // Align the counter to 64-byte address
     gtm_tq->task_counter = NULL;
-    posix_memalign((void**)&gtm_tq->task_counter, 64, INT_SIZE * 32);
-    if (gtm_tq->task_counter == NULL) return GTM_TQ_ALLOC_FAILED;
+    int ret = posix_memalign((void**)&gtm_tq->task_counter, 64, INT_SIZE * 32);
+    if ((gtm_tq->task_counter == NULL) || (ret != 0)) return GTM_TQ_ALLOC_FAILED;
     
     MPI_Info mpi_info;
     MPI_Info_create(&mpi_info);

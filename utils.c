@@ -59,7 +59,7 @@ void print_double_mat(double *mat, const int ldm, const int nrows, const int nco
             int idx = i * ldm + j;
             double x = mat[idx];
             if (x >= 0.0) printf(" ");
-            printf("%.4lf\t", x);
+            printf("%.3lf\t", x);
         }
         printf("\n");
     }
