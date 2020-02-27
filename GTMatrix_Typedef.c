@@ -82,18 +82,33 @@ int GTM_create(
     if (gtm->symm_buf == NULL) return GTM_ALLOC_FAILED;
     
     // Allocate shared memory and its MPI window
+    // Don't know why sometimes MVAPICH2 2.x has a segment fault in MPI_Win_shared_query(),
+    // but MPICH 3.2.2 and Intel MPI 19 works well. Allow user to disable shared memory 
+    // optimization when necessary.
+    int shm_opt = 1;
+    char *shm_opt_p = getenv("GTM_SHM_OPT");
+    if (shm_opt_p != NULL) 
+    {
+        shm_opt = atoi(shm_opt_p);
+        if (shm_opt < 0 || shm_opt > 1) shm_opt = 1;
+    }
     // (1) Split communicator to get shared memory communicator
     MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, my_rank, MPI_INFO_NULL, &gtm->shm_comm);
     MPI_Comm_rank(gtm->shm_comm, &gtm->shm_rank);
     MPI_Comm_size(gtm->shm_comm, &gtm->shm_size);
     gtm->shm_global_ranks = (int*) malloc(sizeof(int) * gtm->shm_size);
     if (gtm->shm_global_ranks == NULL) return GTM_ALLOC_FAILED;
-    MPI_Allgather(&gtm->my_rank, 1, MPI_INT, gtm->shm_global_ranks, 1, MPI_INT, gtm->shm_comm);
+    if (shm_opt == 1)
+    {
+        MPI_Allgather(&gtm->my_rank, 1, MPI_INT, gtm->shm_global_ranks, 1, MPI_INT, gtm->shm_comm);
+    } else {
+        for (int i = 0; i < gtm->shm_size; i++) gtm->shm_global_ranks[i] = -1;
+    }
     // (2) Allocate shared memory 
     int shm_max_nrow, shm_max_ncol;
     MPI_Allreduce(&gtm->my_nrows, &shm_max_nrow, 1, MPI_INT, MPI_MAX, gtm->shm_comm);
     MPI_Allreduce(&gtm->ld_local, &shm_max_ncol, 1, MPI_INT, MPI_MAX, gtm->shm_comm);
-    MPI_Aint shm_msize = (MPI_Aint)shm_max_ncol * (MPI_Aint)shm_max_nrow * (MPI_Aint)gtm->shm_size * (MPI_Aint)unit_size;
+    MPI_Aint shm_msize = (MPI_Aint)shm_max_ncol * (MPI_Aint)shm_max_nrow * (MPI_Aint)unit_size;
     MPI_Info shm_info;
     MPI_Info_create(&shm_info);
     MPI_Info_set(shm_info, "alloc_shared_noncontig", "true");
@@ -103,12 +118,18 @@ int GTM_create(
     );
     MPI_Info_free(&shm_info);
     // (3) Get pointers of all processes in the shared memory communicator
-    MPI_Aint _size;
-    int _disp;
     gtm->shm_mat_blocks = (void**) malloc(sizeof(void*) * gtm->shm_size);
     if (gtm->shm_mat_blocks == NULL) return GTM_ALLOC_FAILED;
-    for (int i = 0; i < gtm->shm_size; i++)
-        MPI_Win_shared_query(gtm->shm_win, i, &_size, &_disp, &gtm->shm_mat_blocks[i]);
+    if (shm_opt == 1)
+    {
+        MPI_Aint _size;
+        int _disp;
+        for (int i = 0; i < gtm->shm_size; i++)
+            MPI_Win_shared_query(gtm->shm_win, i, &_size, &_disp, &gtm->shm_mat_blocks[i]);
+    } else {
+        for (int i = 0; i < gtm->shm_size; i++)
+            gtm->shm_mat_blocks[i] = NULL;
+    }
 
     // Bind local matrix block to global MPI window
     MPI_Info mpi_info;
@@ -212,6 +233,8 @@ int GTM_destroy(GTMatrix_t gtm)
     //free(gtm->mat_block);
     //free(gtm->ld_blks);
     free(gtm->symm_buf);
+    free(gtm->shm_global_ranks);
+    free(gtm->shm_mat_blocks);
     
     for (int dst_rank = 0; dst_rank < gtm->comm_size; dst_rank++)
     {
@@ -233,6 +256,7 @@ int GTM_destroy(GTMatrix_t gtm)
     
     for (int i = 0; i < gtm->comm_size; i++)
         GTM_destroyReqVector(gtm->req_vec[i]);
+    free(gtm->req_vec);
 
     free(gtm);
     

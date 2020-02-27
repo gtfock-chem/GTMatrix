@@ -39,8 +39,7 @@ Symmetrized matrix:
 
 int main(int argc, char **argv)
 {
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init(&argc, &argv);
     
     int r_displs[5] = {0, 1, 4, 6, 10};
     int c_displs[5] = {0, 2, 5, 7, 10};

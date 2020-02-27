@@ -1,6 +1,6 @@
 LIB     = ../libGTMatrix.a
 MPICC   ?= mpiicc
-CFLAGS  = -Wall -g -O3 -std=c99
+CFLAGS  = -Wall -g -O3 -std=gnu99
 
 SRCS = $(wildcard *.c)
 OBJS = $(SRCS:.c=.o)

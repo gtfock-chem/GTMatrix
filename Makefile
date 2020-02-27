@@ -1,6 +1,6 @@
 LIB     = libGTMatrix.a
 MPICC   ?= mpiicc
-CFLAGS  = -Wall -Wunused-variable -g -O3 -std=c99
+CFLAGS  = -Wall -Wunused-variable -g -O3 -std=gnu99
 AR      ?= xiar
 
 OBJS = GTMatrix_Typedef.o GTMatrix_Get.o GTMatrix_Update.o      \

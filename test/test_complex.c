@@ -51,8 +51,7 @@ void print_complex_matrix(double _Complex *A, int n, int m, const char *Aname)
 
 int main(int argc, char **argv)
 {
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init(&argc, &argv);
     
     int r_displs[3] = {0, 2, 6};
     int c_displs[3] = {0, 4, 6};

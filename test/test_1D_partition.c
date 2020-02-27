@@ -41,8 +41,7 @@ Recv matrix:
 
 int main(int argc, char **argv)
 {
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init(&argc, &argv);
 
     int r_displs[17] = {0, 1, 2, 3, 5, 6, 8, 9, 10, 12, 13, 15, 16, 19, 20, 22, 24};
     int c_displs[2] = {0, 4};

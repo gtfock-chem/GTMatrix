@@ -26,8 +26,7 @@ Updated matrix:
 
 int main(int argc, char **argv)
 {
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+    MPI_Init(&argc, &argv);
     
     int r_displs[5] = {0, 2, 3, 7, 8};
     int c_displs[5] = {0, 2, 4, 6, 8};
